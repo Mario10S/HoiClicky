@@ -1,3 +1,4 @@
+const {registerHistory}=require('./history.cjs');
 const {app,BrowserWindow,ipcMain,globalShortcut,screen,dialog,shell}=require('electron');
 const {spawn}=require('node:child_process');const path=require('node:path');const readline=require('node:readline');
 const {registerSounds}=require('./completion-sound.cjs');
@@ -9,6 +10,7 @@ function call(method,args){return new Promise((resolve,reject)=>{const id=++seq;
 function create(options,query){const win=new BrowserWindow({...options,webPreferences:{preload:path.join(__dirname,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true,backgroundThrottling:false,autoplayPolicy:'no-user-gesture-required'}});win.webContents.setWindowOpenHandler(()=>({action:'deny'}));win.webContents.on('will-navigate',event=>event.preventDefault());win.loadFile(path.join(__dirname,'../dist/index.html'),{query});return win;}
 app.on('before-quit',()=>{stopIslandMotion();globalShortcut.unregisterAll();service?.kill();});app.on('window-all-closed',()=>app.quit());
 app.whenReady().then(()=>{
+ registerHistory({ipcMain,app,dialog,getMain:()=>main});
  registerSounds({ipcMain,dialog,app,getMain:()=>main});
  ipcMain.handle('open-link',(event,url)=>{if(event.sender!==main.webContents)throw Error('Invalid sender');const parsed=new URL(url);if(!['https:','http:'].includes(parsed.protocol))throw Error('Unsupported link');return shell.openExternal(parsed.href);});
  service=spawn('dotnet',[path.join(__dirname,'../../backend/bin/Release/net8.0-windows/HoiClicky.Service.dll')],{windowsHide:true,stdio:['pipe','pipe','pipe']});

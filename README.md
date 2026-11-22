@@ -60,3 +60,11 @@ The optional ChatGPT connection is retained for existing users, with its own eli
 Provider implementations are behind IAiProvider in backend/Providers/AiProviders.cs. Ollama is restricted to http://127.0.0.1:11434, receives no OAuth credentials, and streams NDJSON from /api/chat. Screenshot capability is checked before capturing. This does not add screenshot previews or sensitive-content filtering.
 
 Run provider regression checks with `dotnet run --project tests/Providers/Providers.csproj`. These use an in-memory HTTP handler, not a real model or microphone.
+
+## Local conversation history
+
+The Electron sidebar automatically saves chat text to JSON files under Electron's userData/conversations directory (normally %APPDATA%/hoiclicky-desktop/conversations on Windows). This history is plain text protected by the Windows account's folder permissions, not DPAPI-encrypted. Screenshots and audio are not saved in conversation history. These chats are separate from ChatGPT's website and do not sync to it.
+
+Search, reopen, start new chats, or delete individual conversations with confirmation. Requests include at most the last 12 non-empty messages from the selected chat; older screenshots are never resent. Text is sent to the selected provider only when requesting an answer. Messages from earlier versions were in memory only and cannot be recovered after that app session ended.
+
+Run local history/format/sound tests with `node --test tests/Desktop/*.test.mjs` and provider checks with `dotnet run --project tests/Providers/Providers.csproj`.

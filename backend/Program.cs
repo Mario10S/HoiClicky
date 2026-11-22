@@ -40,7 +40,9 @@ class Program {
      if(string.IsNullOrWhiteSpace(model)||string.IsNullOrWhiteSpace(question))throw new Exception("Choose a model and enter a question.");
      var ai=AiProviders.Current;byte[]? image=null;if(args.GetProperty("screen").GetBoolean()){await ai.ValidateImagesAsync(model);if(!LocalSettings.Current.AllowScreenCapture)throw new Exception("Screen permission is disabled.");image=ScreenCapture.CaptureCursorMonitorJpeg();}
      Emit(new{eventName="captured",value=true});
-     result=await ai.AskAsync(question,image,model,text=>Emit(new{eventName="answer",value=text}));break;
+     var history=new List<(string Role,string Text)>();
+     if(args.TryGetProperty("history",out var prior)&&prior.ValueKind==JsonValueKind.Array){foreach(var turn in prior.EnumerateArray().TakeLast(12)){var role=turn.GetProperty("role").GetString();var text=turn.GetProperty("text").GetString()??"";if(role is not ("user" or "assistant"))throw new Exception("Invalid history role.");if(text.Length>12000)text=text[..12000];history.Add((role,text));}}
+     result=await ai.AskAsync(question,image,model,text=>Emit(new{eventName="answer",value=text}),history);break;
     case "voice":
      if(!LocalSettings.Current.AllowMicrophone)throw new Exception("Enable microphone access in Settings first.");
      await voice.ListenAsync((kind,value)=>Emit(new{eventName="voice",kind,value}));result=true;break;

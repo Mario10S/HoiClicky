@@ -10,25 +10,15 @@ internal static class OpenAiResponses
 {
     private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromMinutes(3) };
 
-    public static async Task<string> AskAsync(string question, byte[]? screenshot, string model, Action<string> onText)
+    public static async Task<string> AskAsync(string question, byte[]? screenshot, string model, Action<string> onText, IReadOnlyList<(string Role,string Text)>? history=null)
     {
         var token = await OAuthService.GetAccessTokenAsync();
         var content = new List<object> { new { type = "input_text", text = question } };
         if (screenshot is not null) content.Add(new { type = "input_image", image_url = "data:image/jpeg;base64," + Convert.ToBase64String(screenshot) });
-        var requestBody = JsonSerializer.Serialize(new
-        {
-            model,
-            input = new[]
-            {
-                new
-                {
-                    role = "user",
-                    content = content.ToArray()
-                }
-            },
-            store = false,
-            stream = true
-        });
+        var input = new List<object>();
+        foreach(var turn in history??[])input.Add(new {role=turn.Role,content=turn.Text});
+        input.Add(new {role="user",content=content.ToArray()});
+        var requestBody = JsonSerializer.Serialize(new {model,input,store=false,stream=true});
 
         using var request = new HttpRequestMessage(HttpMethod.Post, "https://api.openai.com/v1/responses");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);

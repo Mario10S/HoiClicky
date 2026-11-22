@@ -9,8 +9,8 @@ class Tests {
   var models=await provider.ModelsAsync();Check(models.Count==2&&models[0].SupportsImages==false&&models[1].SupportsImages==true,"Capabilities were not mapped.");
   try{await provider.ValidateImagesAsync("text");throw new Exception("Text-only model accepted an image.");}catch(InvalidOperationException ex){Check(ex.Message.Contains("cannot read screenshots"),"Incorrect vision error.");}
   await provider.ValidateImagesAsync("vision");
-  var updates=new List<string>();handler.Reply=async request=>{Check(request.Headers.Authorization is null,"Cloud credentials leaked to Ollama.");Check((await request.Content!.ReadAsStringAsync()).Contains("question"),"Prompt was missing.");return new(HttpStatusCode.OK){Content=new StringContent("{\"message\":{\"content\":\"Hello \"},\"done\":false}\n{\"message\":{\"content\":\"world\"},\"done\":true}\n")};};
-  var result=await provider.AskAsync("question",null,"text",updates.Add);Check(result=="Hello world"&&updates.Count==2,"Streaming deltas failed.");
+  var updates=new List<string>();handler.Reply=async request=>{Check(request.Headers.Authorization is null,"Cloud credentials leaked to Ollama.");var payload=await request.Content!.ReadAsStringAsync();Check(payload.Contains("question"),"Prompt was missing.");using var body=System.Text.Json.JsonDocument.Parse(payload);Check(body.RootElement.GetProperty("messages").GetArrayLength()==3,"Conversation context was missing.");Check(body.RootElement.GetProperty("messages")[0].GetProperty("content").GetString()=="I own a blue car","Wrong conversation context.");return new(HttpStatusCode.OK){Content=new StringContent("{\"message\":{\"content\":\"Hello \"},\"done\":false}\n{\"message\":{\"content\":\"world\"},\"done\":true}\n")};};
+  var result=await provider.AskAsync("question",null,"text",updates.Add,[("user","I own a blue car"),("assistant","Understood")]);Check(result=="Hello world"&&updates.Count==2,"Streaming deltas failed.");
   handler.Reply=_=>Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK){Content=new StringContent("{\"message\":{\"content\":\"partial\"},\"done\":false}\n")});
   try{await provider.AskAsync("question",null,"text",_=>{});throw new Exception("Truncated response succeeded.");}catch(InvalidOperationException ex){Check(ex.Message.Contains("disconnected"),"Incorrect incomplete-stream error.");}
   handler.Reply=_=>throw new HttpRequestException("offline");try{await provider.ModelsAsync();throw new Exception("Offline provider succeeded.");}catch(InvalidOperationException ex){Check(ex.Message.Contains("Cannot reach Ollama"),"Incorrect offline error.");}
@@ -21,5 +21,5 @@ class Tests {
 namespace HoiClicky {
  internal class LocalSettings{public static LocalSettings Current=new();public string? Provider { get; set; }}
  internal static class OAuthService{public static bool HasCredentials=>false;}
- internal static class OpenAiResponses{public sealed record ModelChoice(string Slug,string Name);public static Task<List<ModelChoice>> ListModelsAsync()=>throw new NotImplementedException();public static Task<string> AskAsync(string a,byte[]? b,string c,Action<string> d)=>throw new NotImplementedException();}
+ internal static class OpenAiResponses{public sealed record ModelChoice(string Slug,string Name);public static Task<List<ModelChoice>> ListModelsAsync()=>throw new NotImplementedException();public static Task<string> AskAsync(string a,byte[]? b,string c,Action<string> d,IReadOnlyList<(string Role,string Text)>? history=null)=>throw new NotImplementedException();}
 }

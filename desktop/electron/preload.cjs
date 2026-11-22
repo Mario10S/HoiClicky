@@ -1,5 +1,6 @@
 const {contextBridge,ipcRenderer}=require('electron');
 contextBridge.exposeInMainWorld('hoi',{
+ history:(action,value)=>ipcRenderer.invoke('history',action,value),
  sound:(action,value)=>ipcRenderer.invoke('completion-sound',action,value),openLink:url=>ipcRenderer.invoke('open-link',url),
  presentation:value=>ipcRenderer.invoke('presentation',value),islandLayout:value=>ipcRenderer.invoke('island-layout',value),
  islandMode:value=>ipcRenderer.invoke('island-mode',value),
