@@ -1,70 +1,59 @@
 # HoiClicky
 
-HoiClicky is a Windows 11 desktop port inspired by [YoClicky](https://github.com/mekanikal-ch/yoclicky), an MIT-licensed macOS screen-side assistant. This project keeps the MIT license and upstream copyright notices. See [LICENSE](LICENSE).
+**A free AI screen companion that understands your screen, listens when asked, and helps turn conversations into actions.**
 
-## MVP
+HoiClicky is an early Windows 11 pre-release. It is an independent Windows port inspired by the MIT-licensed YoClicky project. It is not affiliated with OpenAI or the original authors. The upstream MIT license and attribution are preserved in [LICENSE](LICENSE).
 
-- Sign in with ChatGPT using OpenAI's documented open-source OAuth flow. First sign-in dynamically registers HoiClicky; the issued client ID is reused on later sign-ins.
-- Press **Ctrl + Alt + Space** or click **Ask about my screen** to open a question box. A monitor screenshot is captured only after you press **Send**.
-- The screenshot and question are sent directly to `POST https://api.openai.com/v1/responses`; the app sets `store: false` and streams the result.
-- Read the response aloud through the Windows SAPI voice, if desired.
-- Disconnect removes the encrypted local token file. Screen and planned microphone permissions are in Privacy settings. This MVP does not access the microphone.
+## What works today
 
-Screenshots are held in memory for the request and are not written to disk. The ChatGPT access and refresh tokens are protected per Windows user with DPAPI under `%LOCALAPPDATA%\HoiClicky\credentials.dpapi`. Non-secret preferences, the issued OAuth client ID and stable installation host ID are in `%LOCALAPPDATA%\HoiClicky\settings.json`.
+- Compact floating assistant with a chat window and searchable local conversation sidebar.
+- Ask about the current screen on demand. A screenshot is captured only when you send a screen question.
+- Choose a local Ollama model, or optionally connect an eligible ChatGPT account through OpenAI's official Sign in with ChatGPT flow. ChatGPT plan access and available models depend on OpenAI's eligibility and limits; a ChatGPT subscription does not provide API-key access.
+- Hold two configurable keys to record speech, then transcribe locally with Whisper when set up. The transcript is sent automatically after you release the keys.
+- Render formatted answers, choose a completion chime, or select an MP3 from your PC.
+- Keep conversations on this PC and continue them later. Recent text is included for follow-up questions; old screenshots are not resent.
+- Protect OAuth tokens with Windows DPAPI and disconnect from the app's Settings.
 
-## Build
+## Early-release limits
 
-Requirements: Windows 11, .NET 8 SDK, and a network connection for NuGet restore and OpenAI sign-in/API access.
+This build is still a work in progress. Screen questions currently capture the monitor containing the pointer; there is no region picker, OCR, context preview or application exclusion list yet. Do not use it to capture sensitive screens. Local chat history is plain text in the current Windows user profile and does not sync to ChatGPT. Speech setup is optional and requires downloading the Whisper model. There is no signed installer or automatic updater yet.
+
+## Run from source
+
+Requirements: Windows 11, .NET 8 SDK, Node.js and npm. Ollama is optional for local AI. Network access is required for package restore, ChatGPT sign-in, and cloud requests.
 
 ```powershell
-dotnet restore
-dotnet build -c Release
-dotnet run
+git clone https://github.com/Mario10S/HoiClicky.git
+cd HoiClicky
+dotnet build backend\HoiClicky.Service.csproj -c Release
+cd desktop
+npm install
+npm start
 ```
 
-Install the .NET 8 SDK to build the project. It has no external NuGet package dependencies.
+To enable local Whisper speech recognition, run `powershell -ExecutionPolicy Bypass -File ..\speech\setup.ps1` from the `desktop` directory. This downloads Python dependencies and the Whisper model. Microphone capture begins only when push-to-talk is triggered and microphone access is enabled.
 
-## OpenAI setup
+## ChatGPT connection
 
-The implementation follows OpenAI's [Sign in with ChatGPT quickstart](https://developers.openai.com/siwc/quickstart/) and [open-source plan-usage docs](https://developers.openai.com/siwc/token-sharing-open-source/): first authorization uses `dynamic_agent_client`, HoiClicky as the `agent_name_hint`, a persisted `ext_agent_host_id`, PKCE, state and nonce, and the loopback callback `http://127.0.0.1:1455/auth/callback`. OpenAI returns an issued client ID that HoiClicky retains. The user reviews the app/agent and requested permissions during sign-in. No client secret or API key is used.
+The optional account connection uses OpenAI's documented [Sign in with ChatGPT for open-source apps](https://developers.openai.com/siwc/quickstart/) flow, including dynamic client registration, PKCE and a local callback. The user approves the app and permissions in OpenAI's sign-in flow. Account eligibility, model availability and usage limits are determined by OpenAI. HoiClicky does not use browser cookies, session scraping or a hard-coded API key.
 
-OpenAI may ask the user to name and approve HoiClicky as a client on first sign-in. ChatGPT plan usage requires the `chatgpt.tokens.use.direct` permission and eligibility under the user's plan. The app only enables requests when that permission is granted. Plan limits and preview availability are controlled by OpenAI.
+## Privacy and local files
 
-## Windows port roadmap
+- OAuth credentials are protected with Windows DPAPI under `%LOCALAPPDATA%\HoiClicky\credentials.dpapi`.
+- Non-secret preferences are stored in `%LOCALAPPDATA%\HoiClicky\settings.json`.
+- Conversations are stored as plain-text JSON in Electron's user data folder under `conversations` (normally `%APPDATA%\hoiclicky-desktop\conversations`). They are separate from ChatGPT website history.
+- Screenshots and microphone audio are not saved to conversation files. Screen images are sent only when the user sends a screen question; the selected AI provider processes the request.
+- Ollama requests go to the local Ollama service. When ChatGPT is selected, request text and any explicitly captured screenshot are sent to OpenAI.
 
-1. MVP: account connection, explicit screen questions, response window, optional speech.
-2. Cursor buddy and pointer target visualization.
-3. Push-to-talk, on-device speech transcription and dictation.
-4. Accessible text selection and document reading integrations.
+## Development checks
 
-The Windows UI and OS integrations use WPF, Windows global hotkeys, GDI screen capture, DPAPI, and SAPI. OAuth and Responses API code are isolated in `OAuthService` and `OpenAiResponses` for incremental development.
+```powershell
+node --test tests/Desktop/*.test.mjs
+dotnet run --project tests/Providers/Providers.csproj
+```
+
+These checks exercise formatting, local history, audio settings and provider behavior with test doubles. They do not replace testing on a real Windows installation, microphone, display, Ollama model or ChatGPT account.
 
 ## Upstream attribution
 
-Ported from the ideas and MIT-licensed source of [mekanikal-ch/yoclicky](https://github.com/mekanikal-ch/yoclicky). The original license identifies Farza's Clicky and Théotime's YoClicky; their notices are retained verbatim in `LICENSE`.
-
-## Desktop preview
-
-The updated UI includes an integrated answer panel, editable voice transcript, floating assistant island, and an account-specific model picker. Ctrl+Alt+Space opens chat; Ctrl+Alt+V starts/stops local microphone recognition. Review the transcript and click Send. Windows speech recognition uses the installed desktop speech language; additional languages require Windows speech packs. Recording ends after 60 seconds at most. Enable microphone access in Privacy & Voice first.
-
-The speech helper is compiled from SpeechHost.source with the Windows .NET Framework compiler during the build. It runs hidden only during an explicit voice request, returns transcripts and microphone levels over local standard output, and saves no audio. Read-aloud uses Windows SAPI. The model choice is persisted locally; unavailable models produce a visible error rather than silently choosing another model.
-
-Still pending: hold-to-talk, voice/language picker, dictation into other apps, document reading, pointer targeting, and saved conversation history. The assistant currently displays the latest answer.
-
-## Free local AI provider
-
-In Settings > AI provider choose Ollama (on this PC), start Ollama, and click Refresh models. Select an installed model in the composer. Text-only models disable screenshot sharing; vision-capable models can accept screenshots. There is no Hoiclicky account, subscription or cloud key required for local inference. Model downloads and local hardware are the user's responsibility. Hoiclicky does not download models automatically.
-
-The optional ChatGPT connection is retained for existing users, with its own eligibility and usage limits. Existing connected users stay on ChatGPT until they switch. New users without an existing connection default to Ollama. Cloud API-key providers are not implemented yet.
-
-Provider implementations are behind IAiProvider in backend/Providers/AiProviders.cs. Ollama is restricted to http://127.0.0.1:11434, receives no OAuth credentials, and streams NDJSON from /api/chat. Screenshot capability is checked before capturing. This does not add screenshot previews or sensitive-content filtering.
-
-Run provider regression checks with `dotnet run --project tests/Providers/Providers.csproj`. These use an in-memory HTTP handler, not a real model or microphone.
-
-## Local conversation history
-
-The Electron sidebar automatically saves chat text to JSON files under Electron's userData/conversations directory (normally %APPDATA%/hoiclicky-desktop/conversations on Windows). This history is plain text protected by the Windows account's folder permissions, not DPAPI-encrypted. Screenshots and audio are not saved in conversation history. These chats are separate from ChatGPT's website and do not sync to it.
-
-Search, reopen, start new chats, or delete individual conversations with confirmation. Requests include at most the last 12 non-empty messages from the selected chat; older screenshots are never resent. Text is sent to the selected provider only when requesting an answer. Messages from earlier versions were in memory only and cannot be recovered after that app session ended.
-
-Run local history/format/sound tests with `node --test tests/Desktop/*.test.mjs` and provider checks with `dotnet run --project tests/Providers/Providers.csproj`.
+HoiClicky is a Windows desktop port inspired by [mekanikal-ch/yoclicky](https://github.com/mekanikal-ch/yoclicky). The original MIT copyright notices for Farza's Clicky and Théotime's YoClicky are retained in [LICENSE](LICENSE).
