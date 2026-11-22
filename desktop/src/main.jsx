@@ -40,17 +40,13 @@ function App(){
 }
 
 function FloatingAssistant({phase,level}){
- const [compact,setCompact]=useState(false),[dragging,setDragging]=useState(false);
- const pointer=useRef(null);
+ const [compact,setCompact]=useState(false);
  const [logo,setLogo]=useState({x:0,y:0,tilt:0});
  useEffect(()=>api.events(event=>{if(event.eventName==='logo-motion')setLogo(event);}),[]);
-
  async function changeMode(value){await api.islandMode(value);setCompact(value);}
- function down(e){if(e.button!==0||e.target.closest('[data-control]'))return;e.currentTarget.setPointerCapture(e.pointerId);pointer.current={x:e.screenX,y:e.screenY,moved:false};setDragging(true);api.dragStart();}
- function move(e){if(pointer.current&&Math.hypot(e.screenX-pointer.current.x,e.screenY-pointer.current.y)>4)pointer.current.moved=true;}
- function up(e){if(!pointer.current)return;const moved=pointer.current.moved;pointer.current=null;setDragging(false);setLogo({x:0,y:0,tilt:0});api.dragEnd();if(e.currentTarget.hasPointerCapture(e.pointerId))e.currentTarget.releasePointerCapture(e.pointerId);if(!moved&&e.type!=='pointercancel'){if(compact)changeMode(false);else api.window('open');}}
- return <div className={'float-root '+(compact?'compact':'')}><div className={'island '+(dragging?'dragging':'')} onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} title={compact?'Drag to move � Click to expand':'Drag to move � Click to open chat'}>
- <div className="orb small spring-logo" style={{transform:`translate(${logo.x}px,${logo.y}px) rotate(${logo.tilt}deg) scale(${dragging?1.05:1})`}}><Sparkles size={compact?23:16}/></div>{!compact&&<><span className="island-status">{phase}</span><div className="wave">{[.4,.7,1,.8,.5].map((n,i)=><i key={i} style={{height:4+level*.22*n}}/>)}</div><button data-control className="collapse-island" title="Collapse to circle" aria-label="Collapse to circle" onClick={()=>changeMode(true)}><Minus size={15}/></button></>}
+
+ return <div className={'float-root '+(compact?'compact':'')}><div className="island native-drag" title="Drag the surface to move. Click the logo to open.">
+ <button aria-label={compact?"Expand assistant":"Open chat"} onClick={()=>compact?changeMode(false):api.window('open')} className="orb small spring-logo" style={{transform:`translate(${logo.x}px,${logo.y}px) rotate(${logo.tilt}deg)`}}><Sparkles size={compact?23:16}/></button>{!compact&&<><span className="island-status">{phase}</span><div className="wave">{[.4,.7,1,.8,.5].map((n,i)=><i key={i} style={{height:4+level*.22*n}}/>)}</div><button data-control className="collapse-island" title="Collapse to circle" aria-label="Collapse to circle" onClick={()=>changeMode(true)}><Minus size={15}/></button></>}
  </div></div>;
 }
 
