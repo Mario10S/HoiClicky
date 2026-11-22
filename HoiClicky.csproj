@@ -14,4 +14,4 @@
   <Target Name="BuildSpeechHost" BeforeTargets="BeforeBuild">
     <Exec Command="&quot;$(WINDIR)\Microsoft.NET\Framework64\v4.0.30319\csc.exe&quot; /nologo /target:exe /out:SpeechHost.exe /r:&quot;$(WINDIR)\Microsoft.NET\assembly\GAC_MSIL\System.Speech\v4.0_4.0.0.0__31bf3856ad364e35\System.Speech.dll&quot; SpeechHost.source" />
   </Target>
-<ItemGroup><Compile Remove="backend/**/*.cs" /></ItemGroup></Project>
+<ItemGroup><Compile Remove="backend/**/*.cs;tests/**/*.cs" /></ItemGroup></Project>

@@ -50,3 +50,13 @@ The updated UI includes an integrated answer panel, editable voice transcript, f
 The speech helper is compiled from SpeechHost.source with the Windows .NET Framework compiler during the build. It runs hidden only during an explicit voice request, returns transcripts and microphone levels over local standard output, and saves no audio. Read-aloud uses Windows SAPI. The model choice is persisted locally; unavailable models produce a visible error rather than silently choosing another model.
 
 Still pending: hold-to-talk, voice/language picker, dictation into other apps, document reading, pointer targeting, and saved conversation history. The assistant currently displays the latest answer.
+
+## Free local AI provider
+
+In Settings > AI provider choose Ollama (on this PC), start Ollama, and click Refresh models. Select an installed model in the composer. Text-only models disable screenshot sharing; vision-capable models can accept screenshots. There is no Hoiclicky account, subscription or cloud key required for local inference. Model downloads and local hardware are the user's responsibility. Hoiclicky does not download models automatically.
+
+The optional ChatGPT connection is retained for existing users, with its own eligibility and usage limits. Existing connected users stay on ChatGPT until they switch. New users without an existing connection default to Ollama. Cloud API-key providers are not implemented yet.
+
+Provider implementations are behind IAiProvider in backend/Providers/AiProviders.cs. Ollama is restricted to http://127.0.0.1:11434, receives no OAuth credentials, and streams NDJSON from /api/chat. Screenshot capability is checked before capturing. This does not add screenshot previews or sensitive-content filtering.
+
+Run provider regression checks with `dotnet run --project tests/Providers/Providers.csproj`. These use an in-memory HTTP handler, not a real model or microphone.

@@ -13,6 +13,7 @@ internal sealed class LocalSettings
     public string? IssuedClientId { get; set; }
     public bool AllowScreenCapture { get; set; } = true;
     public bool AllowMicrophone { get; set; }
+    public string? Provider { get; set; }
     public string? Model { get; set; }
     public int TalkKey1 { get; set; } = 162;
     public int TalkKey2 { get; set; } = 164;
