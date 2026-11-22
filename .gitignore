@@ -14,3 +14,7 @@ node_modules/
 desktop/dist/
 **/bin/
 **/obj/
+
+speech/.venv/
+speech/model/
+__pycache__/

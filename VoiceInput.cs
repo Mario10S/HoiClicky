@@ -5,10 +5,17 @@ namespace HoiClicky;
 internal sealed class VoiceInput : IDisposable {
  private Process? process;
  public async Task ListenAsync(Action<string,string> update) {
-  var start = new ProcessStartInfo(Path.Combine(AppContext.BaseDirectory,"SpeechHost.exe")) { UseShellExecute=false, CreateNoWindow=true, RedirectStandardInput=true, RedirectStandardOutput=true, RedirectStandardError=true };
+  var project = new DirectoryInfo(AppContext.BaseDirectory);
+  while(project is not null && !Directory.Exists(Path.Combine(project.FullName,"speech"))) project=project.Parent;
+  var speechRoot=project is null ? "" : Path.Combine(project.FullName,"speech");
+  var python=Path.Combine(speechRoot,".venv","Scripts","python.exe");
+  var useWhisper=File.Exists(python)&&Directory.Exists(Path.Combine(speechRoot,"model"));
+  var start = new ProcessStartInfo(useWhisper?python:Path.Combine(AppContext.BaseDirectory,"SpeechHost.exe")) { UseShellExecute=false, CreateNoWindow=true, RedirectStandardInput=true, RedirectStandardOutput=true, RedirectStandardError=true };
+  if(useWhisper) { start.ArgumentList.Add("-u");start.ArgumentList.Add(Path.Combine(speechRoot,"recognize.py")); }
+  else update("loading","Using legacy Windows recognition. Run speech/setup.ps1 for improved local Whisper recognition.");
   using var child = Process.Start(start) ?? throw new InvalidOperationException("Windows speech could not start.");
   process=child;
-  using var timeout=new CancellationTokenSource(TimeSpan.FromSeconds(60));
+  using var timeout=new CancellationTokenSource(TimeSpan.FromMinutes(4));
   using var registration=timeout.Token.Register(()=> { try { child.Kill(); } catch {} });
   try {
    string? line;
