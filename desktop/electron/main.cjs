@@ -1,10 +1,12 @@
 const {app,BrowserWindow,ipcMain,globalShortcut,screen}=require('electron');
 const {spawn}=require('node:child_process');const path=require('node:path');const readline=require('node:readline');
+const {attachIslandMotion}=require('./island-motion.cjs');
+let stopIslandMotion=()=>{};
 let main,island,service,seq=0;const pending=new Map();
 function emit(data){for(const w of [main,island])if(w&&!w.isDestroyed())w.webContents.send('event',data);}
 function call(method,args){return new Promise((resolve,reject)=>{const id=++seq;pending.set(id,{resolve,reject});service.stdin.write(JSON.stringify({id,method,args})+'\n');});}
 function create(options,query){const win=new BrowserWindow({...options,webPreferences:{preload:path.join(__dirname,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true}});win.webContents.setWindowOpenHandler(()=>({action:'deny'}));win.webContents.on('will-navigate',event=>event.preventDefault());win.loadFile(path.join(__dirname,'../dist/index.html'),{query});return win;}
-app.on('before-quit',()=>{globalShortcut.unregisterAll();service?.kill();});app.on('window-all-closed',()=>app.quit());
+app.on('before-quit',()=>{stopIslandMotion();globalShortcut.unregisterAll();service?.kill();});app.on('window-all-closed',()=>app.quit());
 app.whenReady().then(()=>{
  service=spawn('dotnet',[path.join(__dirname,'../../backend/bin/Release/net8.0-windows/HoiClicky.Service.dll')],{windowsHide:true,stdio:['pipe','pipe','pipe']});
  function fail(message){for(const p of pending.values())p.reject(new Error(message));pending.clear();emit({eventName:'error',value:message});}
@@ -28,9 +30,9 @@ app.whenReady().then(()=>{
  ipcMain.handle('window',(_,action)=>{if(action==='minimize')main.minimize();else if(action==='close')app.quit();else{main.show();main.focus();}});
  main=create({width:1100,height:790,minWidth:850,minHeight:620,frame:false,backgroundColor:'#111216',show:false},{});
  const area=screen.getPrimaryDisplay().workArea;
- island=create({width:310,height:76,x:Math.round(area.x+(area.width-310)/2),y:area.y+10,frame:false,transparent:true,alwaysOnTop:true,resizable:false,skipTaskbar:true,show:false},{island:'1'});
+ island=create({width:310,height:76,x:Math.round(area.x+(area.width-310)/2),y:area.y+10,frame:false,transparent:true,backgroundColor:'#00000000',hasShadow:false,alwaysOnTop:true,resizable:false,skipTaskbar:true,show:false},{island:'1'});
+ stopIslandMotion=attachIslandMotion(ipcMain,()=>island);
  main.once('ready-to-show',()=>main.show());island.once('ready-to-show',()=>island.show());
  globalShortcut.register('Control+Alt+Space',()=>{main.show();main.focus();});
  globalShortcut.register('Control+Alt+V',()=>{main.show();main.focus();emit({eventName:'toggleVoice'});});
 }).catch(error=>{console.error('HoiClicky startup failed:',error);app.quit();});
-
