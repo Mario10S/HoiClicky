@@ -33,6 +33,4 @@ app.whenReady().then(()=>{
  island=create({width:310,height:76,x:Math.round(area.x+(area.width-310)/2),y:area.y+10,frame:false,transparent:true,backgroundColor:'#00000000',hasShadow:false,alwaysOnTop:true,resizable:false,skipTaskbar:true,show:false},{island:'1'});
  stopIslandMotion=attachIslandMotion(ipcMain,()=>island);
  main.once('ready-to-show',()=>main.show());island.once('ready-to-show',()=>island.show());
- globalShortcut.register('Control+Alt+Space',()=>{main.show();main.focus();});
- globalShortcut.register('Control+Alt+V',()=>{main.show();main.focus();emit({eventName:'toggleVoice'});});
 }).catch(error=>{console.error('HoiClicky startup failed:',error);app.quit();});

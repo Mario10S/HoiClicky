@@ -8,18 +8,17 @@ def emit(kind, value):
 def main():
     import numpy as np
     import sounddevice as sd
-    from faster_whisper import WhisperModel
     model_dir = Path(__file__).parent / 'model'
     if not model_dir.exists():
         raise RuntimeError('Whisper is not set up. Run speech/setup.ps1 from the project folder.')
-    emit('loading', 'Loading local Whisper model')
-    model = WhisperModel(str(model_dir), device='cpu', compute_type='int8', local_files_only=True)
     stop = threading.Event()
     threading.Thread(target=lambda: (sys.stdin.readline(), stop.set()), daemon=True).start()
     chunks = []
     def callback(data, frames, time, status):
         chunks.append(data[:, 0].copy())
         emit('level', min(100, int(np.sqrt(np.mean(data * data)) * 700)))
+    if stop.is_set():
+        return
     with sd.InputStream(samplerate=16000, channels=1, dtype='float32', blocksize=1600, callback=callback):
         emit('ready', 'Listening with local Whisper')
         stop.wait(60)
@@ -31,6 +30,8 @@ def main():
         emit('error', 'No clear speech detected. Check the selected Windows microphone.')
         return
     language = os.environ.get('HOICLICKY_SPEECH_LANGUAGE', 'en')
+    from faster_whisper import WhisperModel
+    model = WhisperModel(str(model_dir), device='cpu', compute_type='int8', local_files_only=True)
     segments, _ = model.transcribe(audio, language=None if language == 'auto' else language,
         beam_size=5, vad_filter=True, condition_on_previous_text=False)
     text = ' '.join(segment.text.strip() for segment in segments).strip()
