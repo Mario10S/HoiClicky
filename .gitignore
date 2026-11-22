@@ -5,3 +5,5 @@ obj/
 *.suo
 credentials.dpapi
 settings.json
+.dotnet-cli/
+.nuget-packages/

@@ -1,12 +1,10 @@
 using System.Diagnostics;
-using System.IdentityModel.Tokens.Jwt;
 using System.Net;
+using System.Net.Http;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using Microsoft.IdentityModel.Protocols;
-using Microsoft.IdentityModel.Protocols.OpenIdConnect;
-using Microsoft.IdentityModel.Tokens;
+using System.IO;
 
 namespace HoiClicky;
 
@@ -43,7 +41,7 @@ internal static class OAuthService
         var state = RandomBase64Url(32);
         var nonce = RandomBase64Url(32);
         var verifier = RandomBase64Url(48);
-        var challenge = Base64UrlEncoder.Encode(SHA256.HashData(Encoding.ASCII.GetBytes(verifier)));
+        var challenge = Base64UrlEncode(SHA256.HashData(Encoding.ASCII.GetBytes(verifier)));
         using var listener = new HttpListener();
         listener.Prefixes.Add("http://127.0.0.1:1455/auth/");
         listener.Start(); // OpenAI requires the loopback listener to be ready before opening the browser.
@@ -147,31 +145,93 @@ internal static class OAuthService
         using var doc = JsonDocument.Parse(json);
         var root = doc.RootElement;
         var idToken = root.GetProperty("id_token").GetString()!;
-        var metadataUrl = "https://auth.openai.com/.well-known/openid-configuration";
-        var manager = new ConfigurationManager<OpenIdConnectConfiguration>(metadataUrl, new OpenIdConnectConfigurationRetriever(), new HttpDocumentRetriever(Http) { RequireHttps = true });
-        var config = await manager.GetConfigurationAsync(CancellationToken.None);
-        var handler = new JwtSecurityTokenHandler();
-        var principal = handler.ValidateToken(idToken, new TokenValidationParameters
-        {
-            ValidateIssuer = true, ValidIssuer = config.Issuer,
-            ValidateAudience = true, ValidAudience = clientId,
-            ValidateIssuerSigningKey = true, IssuerSigningKeys = config.SigningKeys,
-            ValidateLifetime = true, ClockSkew = TimeSpan.FromMinutes(2)
-        }, out _);
-        if (principal.FindFirst("nonce")?.Value != nonce) throw new SecurityTokenValidationException("Sign-in nonce did not match.");
+        var claims = await ValidateIdTokenAsync(idToken, clientId, nonce);
         var scopes = root.GetProperty("scope").GetString()!.Split(' ', StringSplitOptions.RemoveEmptyEntries);
         if (!scopes.Contains(RequiredScope, StringComparer.Ordinal)) throw new InvalidOperationException("Allow ChatGPT plan usage during sign-in to continue.");
         return new OAuthCredential
         {
             ClientId = clientId,
-            Subject = principal.FindFirst("sub")?.Value ?? throw new SecurityTokenValidationException("Account subject is missing."),
-            Email = principal.FindFirst("email")?.Value ?? "ChatGPT account",
+            Subject = claims.GetProperty("sub").GetString() ?? throw new CryptographicException("Account subject is missing."),
+            Email = claims.TryGetProperty("email", out var email) ? email.GetString() ?? "ChatGPT account" : "ChatGPT account",
             IdToken = idToken,
             AccessToken = root.GetProperty("access_token").GetString()!,
             RefreshToken = root.GetProperty("refresh_token").GetString()!,
             Scopes = scopes,
             ExpiresAt = DateTimeOffset.UtcNow.AddSeconds(root.TryGetProperty("expires_in", out var expires) ? expires.GetInt32() : 3600)
         };
+    }
+
+    private static async Task<JsonElement> ValidateIdTokenAsync(string token, string clientId, string expectedNonce)
+    {
+        var parts = token.Split('.');
+        if (parts.Length != 3) throw new CryptographicException("OpenAI returned a malformed ID token.");
+        using var headerDoc = JsonDocument.Parse(Base64UrlDecode(parts[0]));
+        using var claimsDoc = JsonDocument.Parse(Base64UrlDecode(parts[1]));
+        var header = headerDoc.RootElement;
+        var claims = claimsDoc.RootElement;
+        var algorithm = header.GetProperty("alg").GetString();
+        var keyId = header.TryGetProperty("kid", out var kidNode) ? kidNode.GetString() : null;
+
+        using var httpResponse = await Http.GetAsync("https://auth.openai.com/.well-known/openid-configuration");
+        httpResponse.EnsureSuccessStatusCode();
+        using var metadata = JsonDocument.Parse(await httpResponse.Content.ReadAsStringAsync());
+        var issuer = metadata.RootElement.GetProperty("issuer").GetString();
+        var jwksUri = metadata.RootElement.GetProperty("jwks_uri").GetString();
+        if (string.IsNullOrWhiteSpace(issuer) || string.IsNullOrWhiteSpace(jwksUri) || !Uri.TryCreate(jwksUri, UriKind.Absolute, out var keysUri) || keysUri.Scheme != Uri.UriSchemeHttps)
+            throw new CryptographicException("OpenAI's signing-key metadata was invalid.");
+
+        using var keysResponse = await Http.GetAsync(keysUri);
+        keysResponse.EnsureSuccessStatusCode();
+        using var keysDoc = JsonDocument.Parse(await keysResponse.Content.ReadAsStringAsync());
+        var key = keysDoc.RootElement.GetProperty("keys").EnumerateArray().FirstOrDefault(candidate =>
+            (keyId is null || (candidate.TryGetProperty("kid", out var candidateKid) && candidateKid.GetString() == keyId)) &&
+            (!candidate.TryGetProperty("use", out var use) || use.GetString() == "sig"));
+        if (key.ValueKind != JsonValueKind.Object) throw new CryptographicException("No matching OpenAI signing key was found.");
+
+        var signingInput = Encoding.ASCII.GetBytes(parts[0] + "." + parts[1]);
+        var signature = Base64UrlDecode(parts[2]);
+        var validSignature = VerifyJwtSignature(key, algorithm, signingInput, signature);
+        if (!validSignature) throw new CryptographicException("OpenAI's ID token signature was invalid.");
+
+        if (claims.GetProperty("iss").GetString() != issuer) throw new CryptographicException("OpenAI's ID token issuer was invalid.");
+        var audience = claims.GetProperty("aud");
+        var audienceValid = audience.ValueKind == JsonValueKind.String
+            ? audience.GetString() == clientId
+            : audience.ValueKind == JsonValueKind.Array && audience.EnumerateArray().Any(value => value.GetString() == clientId);
+        if (!audienceValid) throw new CryptographicException("OpenAI's ID token audience was invalid.");
+        if (!claims.TryGetProperty("exp", out var expiry) || expiry.GetInt64() <= DateTimeOffset.UtcNow.ToUnixTimeSeconds())
+            throw new CryptographicException("OpenAI's ID token has expired.");
+        if (claims.TryGetProperty("nbf", out var notBefore) && notBefore.GetInt64() > DateTimeOffset.UtcNow.AddMinutes(2).ToUnixTimeSeconds())
+            throw new CryptographicException("OpenAI's ID token is not valid yet.");
+        if (!claims.TryGetProperty("nonce", out var nonce) || nonce.GetString() != expectedNonce)
+            throw new CryptographicException("Sign-in nonce did not match.");
+        return claims.Clone();
+    }
+
+    private static bool VerifyJwtSignature(JsonElement key, string? algorithm, byte[] data, byte[] signature)
+    {
+        var keyType = key.GetProperty("kty").GetString();
+        if (keyType == "RSA" && algorithm is "RS256" or "PS256")
+        {
+            using var rsa = RSA.Create();
+            rsa.ImportParameters(new RSAParameters
+            {
+                Modulus = Base64UrlDecode(key.GetProperty("n").GetString()!),
+                Exponent = Base64UrlDecode(key.GetProperty("e").GetString()!)
+            });
+            return rsa.VerifyData(data, signature, HashAlgorithmName.SHA256,
+                algorithm == "PS256" ? RSASignaturePadding.Pss : RSASignaturePadding.Pkcs1);
+        }
+        if (keyType == "EC" && algorithm == "ES256" && key.GetProperty("crv").GetString() == "P-256")
+        {
+            using var ecdsa = ECDsa.Create(new ECParameters
+            {
+                Curve = ECCurve.NamedCurves.nistP256,
+                Q = new ECPoint { X = Base64UrlDecode(key.GetProperty("x").GetString()!), Y = Base64UrlDecode(key.GetProperty("y").GetString()!) }
+            });
+            return ecdsa.VerifyData(data, signature, HashAlgorithmName.SHA256, DSASignatureFormat.IeeeP1363FixedFieldConcatenation);
+        }
+        throw new CryptographicException("OpenAI's ID token used an unsupported signing algorithm.");
     }
 
     private static OAuthCredential? Load()
@@ -181,6 +241,13 @@ internal static class OAuthService
     }
     private static void Save(OAuthCredential value) { _credentials = value; Persist(); CredentialsChanged?.Invoke(); }
     private static void Persist() => DpapiStore.Write(JsonSerializer.Serialize(_credentials));
-    private static string RandomBase64Url(int count) => Base64UrlEncoder.Encode(RandomNumberGenerator.GetBytes(count));
+    private static string RandomBase64Url(int count) => Base64UrlEncode(RandomNumberGenerator.GetBytes(count));
+    private static string Base64UrlEncode(byte[] bytes) => Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+    private static byte[] Base64UrlDecode(string value)
+    {
+        var base64 = value.Replace('-', '+').Replace('_', '/');
+        base64 += new string('=', (4 - base64.Length % 4) % 4);
+        return Convert.FromBase64String(base64);
+    }
     private static Dictionary<string, string> ParseQuery(string query) => query.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries).Select(x => x.Split('=', 2)).Where(x => x.Length == 2).ToDictionary(x => Uri.UnescapeDataString(x[0]), x => Uri.UnescapeDataString(x[1].Replace('+', ' ')), StringComparer.Ordinal);
 }
