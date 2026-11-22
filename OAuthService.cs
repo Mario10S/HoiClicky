@@ -78,6 +78,8 @@ internal static class OAuthService
         var values = ParseQuery(callback.Query);
         if (!values.TryGetValue("state", out var returnedState) || !CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(returnedState), Encoding.UTF8.GetBytes(state)))
             throw new InvalidOperationException("Sign-in state did not match. Please try again.");
+        if (!registration && values.TryGetValue("client_id", out var returnedClientId) && returnedClientId != clientId)
+            throw new InvalidOperationException("OpenAI returned a different client registration. Please try signing in again.");
         if (values.TryGetValue("error", out var error)) throw new InvalidOperationException(error == "access_denied" ? "Sign-in was cancelled." : "OpenAI returned sign-in error: " + error);
         if (!values.TryGetValue("code", out var code)) throw new InvalidOperationException("OpenAI did not return an authorization code.");
 

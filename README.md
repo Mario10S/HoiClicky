@@ -22,7 +22,7 @@ dotnet build -c Release
 dotnet run
 ```
 
-The current development environment has .NET runtimes but no .NET SDK, so it cannot compile this project until the .NET 8 SDK is installed.
+Install the .NET 8 SDK to build the project. It has no external NuGet package dependencies.
 
 ## OpenAI setup
 
@@ -41,5 +41,4 @@ The Windows UI and OS integrations use WPF, Windows global hotkeys, GDI screen c
 
 ## Upstream attribution
 
-Ported from the ideas and MIT-licensed source of [mekanikal-ch/yoclicky](https://github.com/mekanikal-ch/yoclicky). The original license identifies Farza's Clicky and Th�otime's YoClicky; their notices are retained verbatim in `LICENSE`.
-
+Ported from the ideas and MIT-licensed source of [mekanikal-ch/yoclicky](https://github.com/mekanikal-ch/yoclicky). The original license identifies Farza's Clicky and Théotime's YoClicky; their notices are retained verbatim in `LICENSE`.
