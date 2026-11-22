@@ -42,3 +42,11 @@ The Windows UI and OS integrations use WPF, Windows global hotkeys, GDI screen c
 ## Upstream attribution
 
 Ported from the ideas and MIT-licensed source of [mekanikal-ch/yoclicky](https://github.com/mekanikal-ch/yoclicky). The original license identifies Farza's Clicky and Théotime's YoClicky; their notices are retained verbatim in `LICENSE`.
+
+## Desktop preview
+
+The updated UI includes an integrated answer panel, editable voice transcript, floating assistant island, and an account-specific model picker. Ctrl+Alt+Space opens chat; Ctrl+Alt+V starts/stops local microphone recognition. Review the transcript and click Send. Windows speech recognition uses the installed desktop speech language; additional languages require Windows speech packs. Recording ends after 60 seconds at most. Enable microphone access in Privacy & Voice first.
+
+The speech helper is compiled from SpeechHost.source with the Windows .NET Framework compiler during the build. It runs hidden only during an explicit voice request, returns transcripts and microphone levels over local standard output, and saves no audio. Read-aloud uses Windows SAPI. The model choice is persisted locally; unavailable models produce a visible error rather than silently choosing another model.
+
+Still pending: hold-to-talk, voice/language picker, dictation into other apps, document reading, pointer targeting, and saved conversation history. The assistant currently displays the latest answer.

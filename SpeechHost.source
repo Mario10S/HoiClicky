@@ -1,0 +1,25 @@
+using System;
+using System.Speech.Recognition;
+using System.Threading;
+using System.Text;
+class SpeechHost {
+ static object gate=new object();
+ static void Emit(string type,string value) { lock(gate) Console.WriteLine(type+":"+Convert.ToBase64String(Encoding.UTF8.GetBytes(value))); }
+ static void Main() {
+  Console.OutputEncoding=Encoding.UTF8;
+  try { using(var engine=new SpeechRecognitionEngine()) {
+   engine.LoadGrammar(new DictationGrammar());
+   engine.SetInputToDefaultAudioDevice();
+   engine.SpeechHypothesized+=(s,e)=>Emit("partial",e.Result.Text);
+   engine.SpeechRecognized+=(s,e)=> { if(e.Result.Confidence>=0.35) Emit("text",e.Result.Text); };
+   engine.AudioLevelUpdated+=(s,e)=>Emit("level",e.AudioLevel.ToString());
+   var done=new ManualResetEvent(false);
+   engine.RecognizeCompleted+=(s,e)=>done.Set();
+   engine.RecognizeAsync(RecognizeMode.Multiple);
+   Emit("ready", "Listening");
+   Console.ReadLine();
+   engine.RecognizeAsyncStop();
+   done.WaitOne(2500);
+  }} catch(Exception e) { Emit("error",e.Message); }
+ }
+}

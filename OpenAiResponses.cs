@@ -10,11 +10,11 @@ internal static class OpenAiResponses
 {
     private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromMinutes(3) };
 
-    public static async Task<string> AskAboutScreenAsync(string question, byte[] screenshot, Action<string> onText)
+    public static async Task<string> AskAsync(string question, byte[]? screenshot, string model, Action<string> onText)
     {
         var token = await OAuthService.GetAccessTokenAsync();
-        var model = await SelectModelAsync(token);
-        var dataUrl = "data:image/jpeg;base64," + Convert.ToBase64String(screenshot);
+        var content = new List<object> { new { type = "input_text", text = question } };
+        if (screenshot is not null) content.Add(new { type = "input_image", image_url = "data:image/jpeg;base64," + Convert.ToBase64String(screenshot) });
         var requestBody = JsonSerializer.Serialize(new
         {
             model,
@@ -23,11 +23,7 @@ internal static class OpenAiResponses
                 new
                 {
                     role = "user",
-                    content = new object[]
-                    {
-                        new { type = "input_text", text = question },
-                        new { type = "input_image", image_url = dataUrl }
-                    }
+                    content = content.ToArray()
                 }
             },
             store = false,
@@ -76,19 +72,23 @@ internal static class OpenAiResponses
         return result.ToString();
     }
 
-    private static async Task<string> SelectModelAsync(string token)
+    public static async Task<List<ModelChoice>> ListModelsAsync()
     {
+        var token = await OAuthService.GetAccessTokenAsync();
         using var request = new HttpRequestMessage(HttpMethod.Get, "https://api.openai.com/v1/models");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         using var response = await Http.SendAsync(request);
         if (!response.IsSuccessStatusCode) throw new InvalidOperationException("Could not load models for this ChatGPT account. Reconnect and try again.");
         using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         if (!doc.RootElement.TryGetProperty("models", out var models)) throw new InvalidOperationException("OpenAI returned no available model list.");
+        var result = new List<ModelChoice>();
         foreach (var model in models.EnumerateArray())
             if (model.TryGetProperty("visibility", out var visibility) && visibility.GetString() == "list" && model.TryGetProperty("slug", out var slug))
-                return slug.GetString()!;
-        throw new InvalidOperationException("No model is currently available to this ChatGPT account.");
+                result.Add(new ModelChoice(slug.GetString()!, model.TryGetProperty("display_name", out var name) ? name.GetString() ?? slug.GetString()! : slug.GetString()!));
+        if(result.Count == 0) throw new InvalidOperationException("No models are currently available for this account.");
+        return result;
     }
+    internal sealed record ModelChoice(string Slug, string Name);
 
     private static string ExplainError(int status, string body)
     {

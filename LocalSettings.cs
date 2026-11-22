@@ -13,6 +13,8 @@ internal sealed class LocalSettings
     public string? IssuedClientId { get; set; }
     public bool AllowScreenCapture { get; set; } = true;
     public bool AllowMicrophone { get; set; }
+    public string? Model { get; set; }
+    public bool ReadAloud { get; set; }
 
     private static LocalSettings Load()
     {

@@ -1,123 +1,73 @@
 using System.Windows;
 using System.Windows.Interop;
-using MessageBox = System.Windows.MessageBox;
-using MessageBoxButton = System.Windows.MessageBoxButton;
-using MessageBoxImage = System.Windows.MessageBoxImage;
-
+using MessageBox=System.Windows.MessageBox;
 namespace HoiClicky;
-
-public partial class MainWindow : Window
-{
-    private const int HotkeyId = 0x4843;
-    private const int WmHotkey = 0x0312;
-    private HwndSource? _source;
-    private bool _busy;
-
-    public MainWindow()
-    {
-        InitializeComponent();
-        ScreenPermission.IsChecked = LocalSettings.Current.AllowScreenCapture;
-        MicrophonePermission.IsChecked = LocalSettings.Current.AllowMicrophone;
-        OAuthService.CredentialsChanged += UpdateConnection;
-        Loaded += (_, _) =>
-        {
-            _source = (HwndSource)PresentationSource.FromVisual(this)!;
-            _source.AddHook(WndProc);
-            // MOD_CONTROL | MOD_ALT | MOD_NOREPEAT
-            if (!NativeMethods.RegisterHotKey(_source.Handle, HotkeyId, 0x0002 | 0x0001 | 0x4000, 0x20))
-                ConnectionStatus.Text = "Ready. The global shortcut is unavailable; use the button instead.";
-            UpdateConnection();
-        };
-        Closed += (_, _) =>
-        {
-            NativeMethods.UnregisterHotKey(_source?.Handle ?? IntPtr.Zero, HotkeyId);
-            OAuthService.CredentialsChanged -= UpdateConnection;
-        };
-    }
-
-    private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
-    {
-        if (msg == WmHotkey && wParam.ToInt32() == HotkeyId)
-        {
-            handled = true;
-            OpenQuestion();
-        }
-        return IntPtr.Zero;
-    }
-
-    private void UpdateConnection()
-    {
-        Dispatcher.Invoke(() =>
-        {
-            var connected = OAuthService.HasCredentials;
-            ConnectionStatus.Text = connected ? $"Connected to ChatGPT ({OAuthService.AccountLabel})." : "Not connected. Sign in to use ChatGPT plan access.";
-            ConnectButton.Content = connected ? "Add / reconnect ChatGPT" : "Continue with ChatGPT";
-            DisconnectButton.IsEnabled = connected;
-            AskButton.IsEnabled = connected && !_busy;
-        });
-    }
-
-    private async void Connect_Click(object sender, RoutedEventArgs e)
-    {
-        ConnectButton.IsEnabled = false;
-        ConnectionStatus.Text = "Opening secure sign-in in your browser…";
-        try { await OAuthService.SignInAsync(); }
-        catch (Exception ex) { ConnectionStatus.Text = "Sign-in did not complete: " + ex.Message; }
-        finally { ConnectButton.IsEnabled = true; UpdateConnection(); }
-    }
-
-    private void Disconnect_Click(object sender, RoutedEventArgs e)
-    {
-        OAuthService.Disconnect();
-        ConnectionStatus.Text = "Disconnected. Local ChatGPT tokens were removed.";
-    }
-
-    private void Permission_Changed(object sender, RoutedEventArgs e)
-    {
-        if (!IsLoaded) return;
-        LocalSettings.Current.AllowScreenCapture = ScreenPermission.IsChecked == true;
-        LocalSettings.Current.AllowMicrophone = MicrophonePermission.IsChecked == true;
-        LocalSettings.Save();
-    }
-
-    private void Ask_Click(object sender, RoutedEventArgs e) => OpenQuestion();
-
-    private void OpenQuestion()
-    {
-        if (_busy) return;
-        if (!OAuthService.HasCredentials)
-        {
-            MessageBox.Show(this, "Connect a ChatGPT account first.", "HoiClicky", MessageBoxButton.OK, MessageBoxImage.Information);
-            return;
-        }
-        if (!LocalSettings.Current.AllowScreenCapture)
-        {
-            MessageBox.Show(this, "Screen capture is disabled in Privacy settings.", "HoiClicky", MessageBoxButton.OK, MessageBoxImage.Information);
-            return;
-        }
-        var dialog = new AskWindow { Owner = this };
-        if (dialog.ShowDialog() != true || string.IsNullOrWhiteSpace(dialog.Question)) return;
-        _ = AskAsync(dialog.Question.Trim());
-    }
-
-    private async Task AskAsync(string question)
-    {
-        _busy = true;
-        UpdateConnection();
-        var response = new ResponseWindow { Owner = this };
-        Hide();
-        response.SetText("Capturing your screen and asking ChatGPT…");
-        try
-        {
-            // Capture starts only after the user presses Send in AskWindow.
-            await Task.Delay(180);
-            var screenshot = ScreenCapture.CaptureCursorMonitorJpeg();
-            Show();
-            response.Show();
-            response.SetText("Sending the screenshot and asking ChatGPT...");
-            response.SetText(await OpenAiResponses.AskAboutScreenAsync(question, screenshot, response.SetText));
-        }
-        catch (Exception ex) { response.SetText("HoiClicky could not finish the request.\n\n" + ex.Message); }
-        finally { if (!IsVisible) Show(); _busy = false; UpdateConnection(); }
-    }
+public partial class MainWindow : Window {
+ private HwndSource? source;
+ private bool busy,listening;
+ private readonly VoiceInput voice=new();
+ private readonly WindowsSpeech speech=new();
+ private AssistantIsland? island;
+ private readonly System.Windows.Threading.DispatcherTimer speechTimer=new() { Interval=TimeSpan.FromMilliseconds(250) };
+ public MainWindow() {
+  InitializeComponent();
+  speechTimer.Tick+=(_,_)=> { if(speech.IsFinished){speechTimer.Stop();if(!busy&&!listening)SetState("Ready");} };
+  ScreenPermission.IsChecked=LocalSettings.Current.AllowScreenCapture;
+  MicrophonePermission.IsChecked=LocalSettings.Current.AllowMicrophone;
+  AutoSpeak.IsChecked=LocalSettings.Current.ReadAloud;
+  OAuthService.CredentialsChanged+=UpdateConnection;
+  Loaded+=async (_,_)=> {
+   source=(HwndSource)PresentationSource.FromVisual(this)!;source.AddHook(WndProc);
+   var chat=NativeMethods.RegisterHotKey(source.Handle,0x4843,0x4003,0x20);
+   var talk=NativeMethods.RegisterHotKey(source.Handle,0x4844,0x4003,0x56);
+   if(!chat||!talk)VoiceHint.Text="Some shortcuts are in use. Use the buttons below.";
+   island=new AssistantIsland(()=>{Show();WindowState=WindowState.Normal;Activate();QuestionBox.Focus();});island.Show();
+   UpdateConnection(); if(OAuthService.HasCredentials)await LoadModels();
+  };
+  Closed+=(_,_)=>{voice.Dispose();speech.Stop();island?.Close();OAuthService.CredentialsChanged-=UpdateConnection;NativeMethods.UnregisterHotKey(source?.Handle??IntPtr.Zero,0x4843);NativeMethods.UnregisterHotKey(source?.Handle??IntPtr.Zero,0x4844);};
+ }
+ private IntPtr WndProc(IntPtr h,int msg,IntPtr w,IntPtr l,ref bool handled) {
+  if(msg==0x312){handled=true;Show();Activate();if(w.ToInt32()==0x4844)ToggleVoice();else QuestionBox.Focus();}return IntPtr.Zero;
+ }
+ private void SetState(string text) {StateLabel.Text=text.ToUpperInvariant();island?.State(text);}
+ private void UpdateConnection()=>Dispatcher.Invoke(()=> { ConnectionStatus.Text=OAuthService.HasCredentials?"Connected · "+OAuthService.AccountLabel:"Connect your ChatGPT account to start.";DisconnectButton.IsEnabled=OAuthService.HasCredentials&&!busy;AskButton.IsEnabled=OAuthService.HasCredentials&&!busy&&!listening; });
+ private async void Connect_Click(object s,RoutedEventArgs e) {
+  ConnectButton.IsEnabled=false;
+  try{await OAuthService.SignInAsync();UpdateConnection();await LoadModels();}catch(Exception ex){ConnectionStatus.Text=ex.Message;}finally{ConnectButton.IsEnabled=true;}
+ }
+ private void Disconnect_Click(object s,RoutedEventArgs e){voice.Dispose();speech.Stop();OAuthService.Disconnect();ModelPicker.ItemsSource=null;UpdateConnection();}
+ private void Permission_Changed(object s,RoutedEventArgs e){if(!IsLoaded)return;LocalSettings.Current.AllowScreenCapture=ScreenPermission.IsChecked==true;LocalSettings.Current.AllowMicrophone=MicrophonePermission.IsChecked==true;LocalSettings.Current.ReadAloud=AutoSpeak.IsChecked==true;if(!LocalSettings.Current.AllowMicrophone)voice.Stop();LocalSettings.Save();}
+ private async Task LoadModels(){try{var models=await OpenAiResponses.ListModelsAsync();ModelPicker.ItemsSource=models;ModelPicker.SelectedValue=LocalSettings.Current.Model;if(ModelPicker.SelectedIndex<0)ModelPicker.SelectedIndex=0;}catch(Exception ex){SetState("Models unavailable");AnswerText.Text=ex.Message;}}
+ private async void RefreshModels_Click(object s,RoutedEventArgs e)=>await LoadModels();
+ private void Model_Changed(object s,System.Windows.Controls.SelectionChangedEventArgs e){if(ModelPicker.SelectedValue is string slug){LocalSettings.Current.Model=slug;if(IsLoaded)LocalSettings.Save();}}
+ private void Voice_Click(object s,RoutedEventArgs e)=>ToggleVoice();
+ private async void ToggleVoice(){
+  if(listening){voice.Stop();return;}if(busy)return;
+  if(!LocalSettings.Current.AllowMicrophone){AnswerText.Text="Enable microphone in Privacy & Voice to use local speech recognition.";return;}
+  speech.Stop();listening=true;VoiceButton.Content="■  Finish recording";SetState("Starting microphone");UpdateConnection();
+  var transcript="";var failed=false;
+  try{await voice.ListenAsync((kind,value)=>Dispatcher.Invoke(()=>{
+   if(kind=="ready")SetState("Listening");
+   if(kind=="level"&&int.TryParse(value,out var level))island?.Level(level);
+   if(kind=="text"){transcript+=(transcript.Length>0?" ":"")+value;QuestionBox.Text=transcript;}
+   if(kind=="partial")QuestionBox.Text=transcript+" "+value;
+   if(kind=="error"){failed=true;AnswerText.Text="Windows speech: "+value+"\nInstall a Windows speech language pack if no recognizer is available.";}
+  }));}catch(Exception ex){failed=true;AnswerText.Text=ex.Message;}
+  finally{listening=false;QuestionBox.Text=transcript;VoiceButton.Content="●  Speak";SetState(failed?"Voice unavailable":"Review transcript");UpdateConnection();}
+ }
+ private void StopSpeech_Click(object s,RoutedEventArgs e){speech.Stop();voice.Stop();SetState("Ready");}
+ private async void Ask_Click(object s,RoutedEventArgs e){
+  if(busy||listening||string.IsNullOrWhiteSpace(QuestionBox.Text))return;
+  if(ModelPicker.SelectedValue is not string model){await LoadModels();return;}
+  busy=true;UpdateConnection();SetState("Thinking");speech.Stop();
+  try{
+   byte[]? image=null;
+   if(LocalSettings.Current.AllowScreenCapture){Hide();island?.Hide();await Task.Delay(200);image=ScreenCapture.CaptureCursorMonitorJpeg();Show();island?.Show();}
+   AnswerText.Text="Asking "+model+"…";
+   var answer=await OpenAiResponses.AskAsync(QuestionBox.Text.Trim(),image,model,text=>Dispatcher.Invoke(()=>AnswerText.Text=text));
+   AnswerText.Text=answer;SetState("Ready");
+   if(LocalSettings.Current.ReadAloud){SetState("Speaking");speech.Speak(answer);speechTimer.Start();}
+  }catch(Exception ex){AnswerText.Text=ex.Message;SetState("Request failed");}
+  finally{Show();island?.Show();busy=false;UpdateConnection();}
+ }
 }

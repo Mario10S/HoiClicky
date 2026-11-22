@@ -23,6 +23,7 @@ public partial class ResponseWindow : Window
 internal sealed class WindowsSpeech
 {
     private object? _voice;
+    public bool IsFinished { get { if(_voice is null)return true; try { dynamic v=_voice; return (int)v.Status.RunningState != 2; } catch { return true; } } }
     public void Speak(string text)
     {
         if (string.IsNullOrWhiteSpace(text)) return;

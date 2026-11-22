@@ -7,3 +7,5 @@ credentials.dpapi
 settings.json
 .dotnet-cli/
 .nuget-packages/
+
+SpeechHost.exe
