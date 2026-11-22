@@ -29,8 +29,10 @@ app.whenReady().then(()=>{
  ipcMain.handle('window',(_,action)=>{if(action==='minimize')main.hide();else if(action==='close')app.quit();else{main.show();main.focus();}});
  main=create({width:1100,height:790,minWidth:850,minHeight:620,frame:false,backgroundColor:'#111216',show:false},{});
  const area=screen.getPrimaryDisplay().workArea;
- island=create({width:56,height:56,x:Math.round(area.x+(area.width-56)/2),y:area.y+10,frame:false,transparent:true,backgroundColor:'#00000000',hasShadow:false,alwaysOnTop:true,resizable:false,skipTaskbar:true,show:false},{island:'1'});
+ island=create({width:56,height:56,x:Math.round(area.x+(area.width-56)/2),y:area.y+10,frame:false,transparent:true,backgroundColor:'#00000000',hasShadow:false,alwaysOnTop:true,resizable:false,minimizable:false,maximizable:false,skipTaskbar:true,show:false},{island:'1'});
  main.setContentProtection(true);island.setContentProtection(true);
  stopIslandMotion=attachIslandMotion(ipcMain,()=>island);
- main.once('ready-to-show',()=>main.show());island.once('ready-to-show',()=>island.show());
+ main.once('ready-to-show',()=>main.show());island.once('ready-to-show',()=>{island.setAlwaysOnTop(true,'screen-saver');island.showInactive();});
+ island.on('blur',()=>{if(!island.isDestroyed()&&island.isVisible())island.setAlwaysOnTop(true,'screen-saver');});
 }).catch(error=>{console.error('HoiClicky startup failed:',error);app.quit();});
+
