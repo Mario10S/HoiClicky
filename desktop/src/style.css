@@ -13,3 +13,5 @@ html:has(.float-root),body:has(.float-root),body:has(.float-root) #root{backgrou
 
 .spring-logo{transition:transform 480ms cubic-bezier(.22,1.65,.4,1);will-change:transform;transform-origin:center}.dragging .spring-logo{transition:transform 110ms ease-out}@media(prefers-reduced-motion:reduce){.spring-logo,.dragging .spring-logo{transform:none!important;transition:none}}
 
+.float-root .native-drag{-webkit-app-region:drag;cursor:default}.float-root .native-drag button{-webkit-app-region:no-drag;cursor:pointer}.float-root.compact .spring-logo{width:30px;height:30px;padding:0;flex-shrink:0}.float-root .spring-logo{transition:transform .25s cubic-bezier(.2,1.6,.35,1)}
+
