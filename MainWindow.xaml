@@ -1,0 +1,44 @@
+<Window x:Class="HoiClicky.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="HoiClicky" Height="430" Width="560" MinHeight="390" MinWidth="500"
+        WindowStartupLocation="CenterScreen" Background="#F7F5FA">
+  <Grid Margin="24">
+    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+    <StackPanel>
+      <TextBlock Text="HoiClicky" FontSize="28" FontWeight="SemiBold" Foreground="#24212A" />
+      <TextBlock Text="Your screen-side assistant" Margin="0,3,0,0" Foreground="#625E68" />
+    </StackPanel>
+    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Margin="0,22,0,0">
+      <StackPanel>
+        <Border Background="White" CornerRadius="12" Padding="16" BorderBrush="#E8E4ED" BorderThickness="1">
+          <StackPanel>
+            <TextBlock Text="ChatGPT connection" FontWeight="SemiBold" FontSize="16" />
+            <TextBlock x:Name="ConnectionStatus" Text="Not connected" Margin="0,8,0,12" Foreground="#625E68" TextWrapping="Wrap" />
+            <StackPanel Orientation="Horizontal">
+              <Button x:Name="ConnectButton" Content="Continue with ChatGPT" Padding="14,8" Click="Connect_Click" />
+              <Button x:Name="DisconnectButton" Content="Disconnect" Padding="14,8" Margin="8,0,0,0" Click="Disconnect_Click" IsEnabled="False" />
+            </StackPanel>
+          </StackPanel>
+        </Border>
+        <Border Background="White" CornerRadius="12" Padding="16" Margin="0,14,0,0" BorderBrush="#E8E4ED" BorderThickness="1">
+          <StackPanel>
+            <TextBlock Text="Screen questions" FontWeight="SemiBold" FontSize="16" />
+            <TextBlock Text="Press Ctrl + Alt + Space to ask about the screen. A screenshot is captured only when you press Send." Margin="0,8,0,12" Foreground="#625E68" TextWrapping="Wrap" />
+            <Button x:Name="AskButton" Content="Ask about my screen…" HorizontalAlignment="Left" Padding="14,8" Click="Ask_Click" />
+          </StackPanel>
+        </Border>
+        <Border Background="White" CornerRadius="12" Padding="16" Margin="0,14,0,0" BorderBrush="#E8E4ED" BorderThickness="1">
+          <StackPanel>
+            <TextBlock Text="Privacy" FontWeight="SemiBold" FontSize="16" />
+            <CheckBox x:Name="ScreenPermission" Content="Allow screen capture when I send a request" Margin="0,10,0,0" IsChecked="True" Checked="Permission_Changed" Unchecked="Permission_Changed" />
+            <CheckBox x:Name="MicrophonePermission" Content="Allow microphone for future dictation" Margin="0,8,0,0" IsChecked="False" Checked="Permission_Changed" Unchecked="Permission_Changed" />
+            <TextBlock Text="Microphone is not accessed in this MVP, even if enabled here." Margin="22,4,0,0" FontSize="12" Foreground="#77727D" TextWrapping="Wrap" />
+            <TextBlock Text="HoiClicky does not save screenshots. The image is sent to OpenAI only after you submit a screen question." Margin="0,10,0,0" FontSize="12" Foreground="#77727D" TextWrapping="Wrap" />
+          </StackPanel>
+        </Border>
+        <TextBlock Text="Ctrl + Alt + Space · Ask about screen" Margin="2,14,0,0" FontSize="12" Foreground="#77727D" />
+      </StackPanel>
+    </ScrollViewer>
+  </Grid>
+</Window>
