@@ -6,10 +6,11 @@ class Program {
  static readonly VoiceInput voice=new();
  static void Emit(object value){lock(outputLock)Console.WriteLine(JsonSerializer.Serialize(value));}
  static object Status()=>new {connected=OAuthService.HasCredentials,account=OAuthService.HasCredentials?OAuthService.AccountLabel:null,screen=LocalSettings.Current.AllowScreenCapture,microphone=LocalSettings.Current.AllowMicrophone,model=LocalSettings.Current.Model};
- static async Task Main(){string? line;while((line=await Console.In.ReadLineAsync())!=null){try{var msg=JsonDocument.Parse(line).RootElement.Clone();_=Handle(msg);}catch{}}voice.Dispose();}
+ static async Task Main(){var requests=new List<Task>();string? line;while((line=await Console.In.ReadLineAsync())!=null){try{var msg=JsonDocument.Parse(line).RootElement.Clone();requests.RemoveAll(task=>task.IsCompleted);requests.Add(Handle(msg));}catch{}}voice.Stop();await Task.WhenAll(requests);voice.Dispose();}
  static async Task Handle(JsonElement msg){var id=msg.GetProperty("id").GetInt32();var method=msg.GetProperty("method").GetString();
   if(method=="voiceStop"){voice.Stop();Emit(new{id,result=true});return;}
-  if(!await gate.WaitAsync(0)){Emit(new{id,error="Finish the current operation first."});return;}
+  // Serialize operations, including token refresh; routine requests wait instead of failing.
+  await gate.WaitAsync();
   try{object? result=null;
    switch(method){
     case "status":result=Status();break;
@@ -32,3 +33,4 @@ class Program {
   }catch(Exception ex){Emit(new{id,error=ex.Message});}finally{gate.Release();}
  }
 }
+
