@@ -1,0 +1,10 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {parseMarkdown,inlineTokens} from '../../desktop/src/markdown.mjs';
+import {createRequire} from 'node:module';
+import fs from 'node:fs';import os from 'node:os';import path from 'node:path';
+const require=createRequire(import.meta.url);
+const {registerSounds}=require('../../desktop/electron/completion-sound.cjs');
+test('formats paragraphs, lists and bold without inserting raw HTML',()=>{const blocks=parseMarkdown('Hello **world**.\n\n- First\n- Second');assert.deepEqual(blocks.map(x=>x.type),['paragraph','list']);assert.equal(blocks[1].items.length,2);assert.equal(inlineTokens('**bold**')[0].type,'strong');assert.equal(inlineTokens('<img onerror=alert(1)>')[0].type,'text');assert.equal(inlineTokens('[bad](javascript:alert(1))')[0].type,'text');});
+test('preserves fenced code and parses tables',()=>{const code=parseMarkdown('```js\nconst x = 1;\n```');assert.equal(code[0].text,'const x = 1;');const table=parseMarkdown('| A | B |\n| --- | --- |\n| 1 | 2 |');assert.equal(table[0].type,'table');assert.deepEqual(table[0].rows,[['1','2']]);});
+test('completion preferences, MP3 selection and sender validation',async()=>{const dir=fs.mkdtempSync(path.join(os.tmpdir(),'hoi-sound-test-'));const file=path.join(dir,'sample.mp3');fs.writeFileSync(file,Buffer.from('fixture'));let handler;const sender={};registerSounds({ipcMain:{handle:(name,fn)=>handler=fn},dialog:{showOpenDialog:async()=>({canceled:false,filePaths:[file]})},app:{getPath:()=>dir},getMain:()=>({webContents:sender})});const event={sender};assert.equal((await handler(event,'get')).mode,'off');assert.equal((await handler(event,'save',{mode:'soft',volume:.4})).mode,'soft');const picked=await handler(event,'pick');assert.equal(picked.name,'sample.mp3');assert.equal(picked.mode,'mp3');assert.equal(await handler(event,'audio'),'data:audio/mpeg;base64,Zml4dHVyZQ==');await assert.rejects(handler({sender:{}},'get'),/Invalid sender/);await assert.rejects(handler(event,'save',{mode:'bad',volume:9}),/Invalid sound/);});

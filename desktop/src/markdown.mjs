@@ -1,0 +1,11 @@
+export function inlineTokens(text){return text.split(/(\*\*[^*]+\*\*|__[^_]+__|`[^`]+`|\*[^*]+\*|\[[^\]]+\]\(https?:\/\/[^\s)]+\))/g).filter(Boolean).map(value=>value.startsWith('**')||value.startsWith('__')?{type:'strong',text:value.slice(2,-2)}:value.startsWith('`')?{type:'code',text:value.slice(1,-1)}:value.startsWith('*')?{type:'em',text:value.slice(1,-1)}:value.match(/^\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)$/)?{type:'link',text:value.match(/^\[([^\]]+)/)[1],href:value.match(/\]\((.*)\)$/)[1]}:{type:'text',text:value});}
+export function parseMarkdown(text){const lines=text.replace(/\r/g,'').split('\n'),blocks=[];let i=0;const cells=line=>line.trim().replace(/^\||\|$/g,'').split('|').map(x=>x.trim());const special=line=>/^\s*(```|~~~|#{1,6}\s|[-*+]\s|\d+\.\s|>\s|---+$)/.test(line);
+ while(i<lines.length){const line=lines[i];if(!line.trim()){i++;continue;}const fence=line.match(/^\s*(```|~~~)(.*)$/);if(fence){const content=[];i++;while(i<lines.length&&!lines[i].trim().startsWith(fence[1]))content.push(lines[i++]);if(i<lines.length)i++;blocks.push({type:'pre',language:fence[2].trim(),text:content.join('\n')});continue;}
+ if(i+1<lines.length&&line.includes('|')&&/^\s*\|?\s*:?-{3,}:?\s*\|/.test(lines[i+1])){const header=cells(line),rows=[];i+=2;while(i<lines.length&&lines[i].includes('|'))rows.push(cells(lines[i++]));blocks.push({type:'table',header,rows});continue;}
+ const heading=line.match(/^(#{1,6})\s+(.*)$/);if(heading){blocks.push({type:'heading',level:heading[1].length,text:heading[2]});i++;continue;}
+ if(/^\s*[-*+]\s/.test(line)||/^\s*\d+\.\s/.test(line)){const ordered=/^\s*\d+\./.test(line),items=[];const pattern=ordered?/^\s*\d+\.\s(.*)$/:/^\s*[-*+]\s(.*)$/;while(i<lines.length&&pattern.test(lines[i]))items.push(lines[i++].match(pattern)[1]);blocks.push({type:'list',ordered,items});continue;}
+ if(/^>\s?/.test(line)){blocks.push({type:'quote',text:line.replace(/^>\s?/,'')});i++;continue;}
+ if(/^\s*---+\s*$/.test(line)){blocks.push({type:'rule'});i++;continue;}
+ const para=[line];i++;while(i<lines.length&&lines[i].trim()&&!special(lines[i])&&!(i+1<lines.length&&lines[i].includes('|')&&lines[i+1].includes('---')))para.push(lines[i++]);blocks.push({type:'paragraph',text:para.join('\n')});
+ }return blocks;
+}
