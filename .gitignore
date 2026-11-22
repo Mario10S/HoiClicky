@@ -9,3 +9,8 @@ settings.json
 .nuget-packages/
 
 SpeechHost.exe
+
+node_modules/
+desktop/dist/
+**/bin/
+**/obj/
