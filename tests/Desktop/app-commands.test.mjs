@@ -26,6 +26,9 @@ test('plans harmless setting changes without confirmation',()=>{
  assert.equal(keys.ok,true);assert.equal(keys.label,'Talk keys → F8');
  assert.equal(planAppAction({action:'set',setting:'talk_keys',value:{key1:32,key2:0}},ctx).ok,false);
  assert.equal(planAppAction({action:'set',setting:'volume',value:2},ctx).ok,false);
+ assert.deepEqual(planAppAction({action:'set',setting:'voice_volume',value:0.4},ctx).change,{type:'voice',patch:{volume:0.4}});
+ assert.equal(planAppAction({action:'set',setting:'voice_volume',value:0.4},ctx).label,'Voice volume → 40%');
+ assert.equal(planAppAction({action:'set',setting:'voice_volume',value:-1},ctx).ok,false);
  assert.equal(planAppAction({action:'set',setting:'sound',value:'mp3'},ctx).ok,false);
 });
 

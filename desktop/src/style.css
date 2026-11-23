@@ -36,6 +36,9 @@ html:has(.float-root),body:has(.float-root),body:has(.float-root) #root{backgrou
 /* Floating assistant: orb, status pill and a resizable glass answer panel.
    The rim light is the one signature: lavender orbits while thinking, mint breathes with the voice, rose flags errors. */
 @property --hc-angle{syntax:'<angle>';inherits:false;initial-value:0deg}
+/* Voice volume slider with its percentage. */
+.volume-control{display:flex;align-items:center;gap:10px}
+.volume-control output{min-width:38px;text-align:right;font-variant-numeric:tabular-nums;color:#a39bb5;font-size:12px}
 .hc-root{--hc-ink:#15131c;--hc-ink-raised:#1f1b29;--hc-mist:#efeaf7;--hc-dim:#a39bb5;--hc-lilac:#c6aef3;--hc-mint:#8fe3c8;--hc-rose:#f29aab;--hc-line:#ffffff14;--hc-rim:var(--hc-lilac);--hc-level:0;
  position:fixed;inset:0;padding:8px;display:flex;align-items:flex-start;justify-content:center;color:var(--hc-mist);font-family:"Segoe UI Variable Text","Segoe UI",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
 html:has(.hc-root),body:has(.hc-root),body:has(.hc-root) #root{background:transparent!important;overflow:hidden;width:100%;height:100%;margin:0}

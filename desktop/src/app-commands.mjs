@@ -65,6 +65,7 @@ function planSetting(setting,value,ctx,status,ok,fail){
    return ok('Talk keys → '+(key2?name(key1)+' + '+name(key2):name(key1)),{type:'setting',patch:{key1,key2}});
   }
   case 'sound':{if(!SOUND_MODES.includes(value))return fail('Sound must be off, soft, bright or mp3.');if(value==='mp3'&&!ctx.sound?.name)return fail('No custom MP3 is chosen yet. Pick one in Settings first.');return ok('Completion sound → '+value,{type:'sound',patch:{mode:value}});}
+  case 'voice_volume':{const volume=Number(value);return Number.isFinite(volume)&&volume>=0&&volume<=1?ok('Voice volume → '+Math.round(volume*100)+'%',{type:'voice',patch:{volume}}):fail('Voice volume must be between 0 and 1.');}
   case 'volume':{const volume=Number(value);return Number.isFinite(volume)&&volume>=0&&volume<=1?ok('Volume → '+Math.round(volume*100)+'%',{type:'sound',patch:{volume}}):fail('Volume must be between 0 and 1.');}
   case 'agent':{
    if(!bool(value))return fail('Agent needs true or false.');
@@ -92,7 +93,7 @@ export function appContext(ctx){
   page:ctx.page,provider:s.provider,model:s.model,models:(ctx.models||[]).slice(0,30).map(m=>({slug:m.Slug,name:m.Name})),
   screen:!!s.screen,screens:s.screens||'all',microphone:!!s.microphone,speak_answers:!!ctx.read,
   talk_keys:{key1:s.key1,key2:s.key2??0,choices:Object.fromEntries((ctx.talkKeys||[]).map(([code,name])=>[name,code]))},
-  sound:{mode:ctx.sound?.mode,volume:ctx.sound?.volume,custom_mp3:!!ctx.sound?.name},
+  sound:{mode:ctx.sound?.mode,volume:ctx.sound?.volume,custom_mp3:!!ctx.sound?.name},voice_volume:ctx.voiceVolume??1,
   agent:{on:!!ctx.agentOn,approval:s.agent?.approval,tools:s.agent?.tools,workspace_chosen:!!s.agent?.workspace},
   saved_chats:(ctx.chats||[]).slice(0,15).map(c=>c.title.slice(0,60)),
  };
