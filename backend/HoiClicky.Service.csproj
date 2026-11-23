@@ -3,4 +3,8 @@
 <ItemGroup>
 <Compile Include="..\OAuthService.cs" Link="OAuthService.cs"/><Compile Include="..\OpenAiResponses.cs" Link="OpenAiResponses.cs"/><Compile Include="..\LocalSettings.cs" Link="LocalSettings.cs"/><Compile Include="..\DpapiStore.cs" Link="DpapiStore.cs"/><Compile Include="..\ScreenCapture.cs" Link="ScreenCapture.cs"/><Compile Include="..\NativeMethods.cs" Link="NativeMethods.cs"/><Compile Include="..\VoiceInput.cs" Link="VoiceInput.cs"/>
 <None Include="..\SpeechHost.exe" Link="SpeechHost.exe" CopyToOutputDirectory="PreserveNewest"/>
-</ItemGroup></Project>
+</ItemGroup>
+<!-- SpeechHost.exe (legacy Windows dictation fallback) is git-ignored; compile it from source when missing so a fresh clone builds. -->
+<Target Name="BuildSpeechHost" BeforeTargets="BeforeBuild" Condition="!Exists('..\SpeechHost.exe')">
+<Exec WorkingDirectory=".." Command="&quot;$(WINDIR)\Microsoft.NET\Framework64\v4.0.30319\csc.exe&quot; /nologo /target:exe /out:SpeechHost.exe /r:&quot;$(WINDIR)\Microsoft.NET\assembly\GAC_MSIL\System.Speech\v4.0_4.0.0.0__31bf3856ad364e35\System.Speech.dll&quot; SpeechHost.source"/>
+</Target></Project>
