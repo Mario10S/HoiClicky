@@ -84,10 +84,10 @@ app.whenReady().then(()=>{
   try{return answer+await activateControl(call,target);}
   finally{if(hiddenPointer&&!hiddenPointer.isDestroyed())hiddenPointer.showInactive();}
  });
- ipcMain.handle('presentation',(event,data)=>{if(event.sender!==main.webContents)throw Error('Invalid sender');if(typeof data?.phase!=='string'||typeof data?.answer!=='string')throw Error('Invalid presentation');const text=value=>typeof value==='string'?value:'';island.webContents.send('event',{eventName:'presentation',phase:data.phase.slice(0,160),answer:data.answer.slice(-24000),question:text(data.question).slice(0,600),model:text(data.model).slice(0,80),talk:text(data.talk).slice(0,40),busy:!!data.busy,listening:!!data.listening,error:text(data.error).slice(0,400)});});
+ ipcMain.handle('presentation',(event,data)=>{if(event.sender!==main.webContents)throw Error('Invalid sender');if(typeof data?.phase!=='string'||typeof data?.answer!=='string')throw Error('Invalid presentation');const text=value=>typeof value==='string'?value:'';island.webContents.send('event',{eventName:'presentation',phase:data.phase.slice(0,160),answer:data.answer.slice(-24000),question:text(data.question).slice(0,600),model:text(data.model).slice(0,80),talk:text(data.talk).slice(0,40),busy:!!data.busy,agentRunning:!!data.agentRunning,listening:!!data.listening,error:text(data.error).slice(0,400)});});
  // Follow-up questions typed into the floating panel are sent through the chat window, so history and providers stay in one place.
  ipcMain.handle('island-ask',(event,text)=>{if(event.sender!==island.webContents)throw Error('Invalid sender');if(typeof text!=='string'||!text.trim()||text.length>32000)throw Error('Invalid question');main.webContents.send('event',{eventName:'islandAsk',text:text.trim()});});
- ipcMain.handle('window',(_,action)=>{if(action==='close'){app.quit();return;}if(!main||main.isDestroyed())return;if(action==='minimize')main.hide();else{main.show();main.focus();}});
+ ipcMain.handle('window',(_,action)=>{if(action==='quit'){app.quit();return;}if(!main||main.isDestroyed())return;if(action==='minimize'||action==='close')main.hide();else{main.show();main.focus();}});
  main=create({width:1100,height:790,minWidth:850,minHeight:620,frame:false,backgroundColor:nativeTheme.shouldUseDarkColors?'#0a0c13':'#f3f4fa',show:false},{});
  main.on('closed',()=>app.quit());
  const islandStore=path.join(app.getPath('userData'),'island.json');

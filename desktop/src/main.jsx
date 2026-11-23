@@ -132,7 +132,7 @@ function App(){
   else{const chat=chats.find(c=>c.id===last.id);if(chat){setChatId(chat.id);setMessages(chat.messages);}}
  }
  const lastAnswer=messages.filter(m=>m.role==='hoi').at(-1)?.text||'';
- useEffect(()=>{if(!onIsland)api.presentation({phase,answer:listening||/transcrib|opening microphone|loading local/i.test(phase)?'':lastAnswer,question:messages.filter(m=>m.role==='you').at(-1)?.text||'',model:models.find(m=>m.Slug===status.model)?.Name||'',talk:talkLabel(status.key1,status.key2),busy,listening,error}).catch(()=>{});},[phase,lastAnswer,busy,listening,error,messages,models,status.model,status.key1,status.key2]);
+ useEffect(()=>{if(!onIsland)api.presentation({phase,answer:listening||/transcrib|opening microphone|loading local/i.test(phase)?'':lastAnswer,question:messages.filter(m=>m.role==='you').at(-1)?.text||'',model:models.find(m=>m.Slug===status.model)?.Name||'',talk:talkLabel(status.key1,status.key2),busy,agentRunning,listening,error}).catch(()=>{});},[phase,lastAnswer,busy,agentRunning,listening,error,messages,models,status.model,status.key1,status.key2]);
 
  if(onIsland)return <FloatingAssistant phase={phase} level={level}/>;
  const locked=busy||listening||voiceRef.current;
@@ -240,7 +240,7 @@ function App(){
    <div className="rail-foot">{page!=='settings'&&<button className="rail-item" onClick={()=>openSettings('general')}><Settings size={16}/><span>Settings</span></button>}<p className="rail-privacy"><Shield size={13}/>Chats stay on this PC. Screenshots are never stored.</p></div>
   </aside>
   <main className="stage">
-   <header className="topbar"><div className="topbar-title">{page==='settings'?<><span className="crumb">Settings</span><ChevronRight size={14}/><span>{tabLabel}</span></>:<span>{currentChat?.title||'New chat'}</span>}</div><div className="window-controls"><button onClick={()=>api.window('minimize')} aria-label="Minimize"><Minus size={16}/></button><button className="close" onClick={()=>api.window('close')} aria-label="Quit"><X size={16}/></button></div></header>
+   <header className="topbar"><div className="topbar-title">{page==='settings'?<><span className="crumb">Settings</span><ChevronRight size={14}/><span>{tabLabel}</span></>:<span>{currentChat?.title||'New chat'}</span>}</div><div className="window-controls"><button onClick={()=>api.window('minimize')} aria-label="Minimize"><Minus size={16}/></button><button className="close" onClick={()=>api.window('close')} aria-label="Close chat"><X size={16}/></button></div></header>
    {page==='settings'?<section className="settings-page" aria-labelledby="settings-title"><div className="settings-inner"><h1 id="settings-title">{tabLabel}</h1>{settingsBody[settingsTab]}</div></section>:<>
     <div className="conversation">{messages.length===0?<div className="home">
      <button id="voice" className={'voice-orb'+(listening?' live':'')+(busy?' busy':'')} style={{'--level':Math.min(1,level/60).toFixed(2)}} onClick={voice} aria-label={listening?'Stop listening':'Start talking'} aria-pressed={listening}><span className="orb-ring"/><span className="orb-ring two"/><span className="orb-core">{listening?<AudioLines size={34}/>:<Mic size={34}/>}</span></button>
@@ -299,7 +299,7 @@ function Grip({edge}){return <div className={'hc-grip hc-grip-'+edge} aria-hidde
 function Wave({level,active}){return <div className={'hc-wave'+(active?' active':'')} aria-hidden="true">{[.45,.75,1,.8,.5].map((n,i)=><i key={i} style={{height:4+Math.min(18,level*.2*n),animationDelay:`${i*90}ms`}}/>)}</div>;}
 
 function FloatingAssistant({level}){
- const [view,setView]=useState({phase:'Ready',answer:'',question:'',model:'',talk:'',busy:false,listening:false,error:''});
+ const [view,setView]=useState({phase:'Ready',answer:'',question:'',model:'',talk:'',busy:false,agentRunning:false,listening:false,error:''});
  const [mode,setMode]=useState('orb'),[logo,setLogo]=useState({x:0,y:0,tilt:0}),[draft,setDraft]=useState(''),[copied,setCopied]=useState(false),[speaking,setSpeaking]=useState(false),[askError,setAskError]=useState('');
  const [pinned,setPinned]=useState(()=>{try{return localStorage.getItem('hoi.island.pinned')==='1';}catch{return false;}});
  const previous=useRef(view),hovering=useRef(false),typing=useRef(false),body=useRef(null),input=useRef(null);
@@ -325,6 +325,7 @@ function FloatingAssistant({level}){
  const state=view.error?'error':transcribing?'transcribing':view.listening?'listening':view.busy?(view.answer?'answering':'thinking'):speaking||view.phase==='Speaking'?'speaking':view.answer?'answered':'idle';
  const label=approvals.length?'Waiting for you':{error:'Needs attention',transcribing:'Transcribing',listening:'Listening',thinking:view.phase||'Thinking',answering:'Answering',speaking:'Speaking',answered:'Answer',idle:'Ready'}[state];
  const talk=view.talk||'your talk key';
+ function stopAgent(event){event?.stopPropagation();api.agentStop().catch(err=>setAskError('Could not stop agent: '+err.message));}
  async function ask(e){e?.preventDefault();const text=draft.trim();if(!text||view.busy||view.listening)return;setAskError('');try{await api.islandAsk(text);setDraft('');}catch(err){setAskError(err.message);}}
  function copy(){navigator.clipboard.writeText(view.answer).then(()=>{setCopied(true);setTimeout(()=>setCopied(false),1600);}).catch(err=>setAskError('Could not copy: '+err.message));}
  function readAloud(){if(speaking){speechSynthesis.cancel();setSpeaking(false);return;}const utterance=new SpeechSynthesisUtterance(speechText(view.answer)||plainText(view.answer));try{utterance.volume=voiceVolume(JSON.parse(localStorage.getItem('voiceConfig')));}catch{}utterance.onend=utterance.onerror=()=>setSpeaking(false);speechSynthesis.cancel();speechSynthesis.speak(utterance);setSpeaking(true);}
@@ -332,7 +333,7 @@ function FloatingAssistant({level}){
  const rimLevel={'--hc-level':Math.min(1,level/60).toFixed(2)};
 
  if(mode==='orb')return <div className={'hc-root mode-orb state-'+state} style={rimLevel}><button className="hc-orb hc-rim" title="Open HoiClicky · drag to move" aria-label="Open HoiClicky" {...orbGesture}>{orb}</button></div>;
- if(mode==='pill')return <div className={'hc-root mode-pill state-'+state} style={rimLevel}><div className="hc-pill hc-rim" role="button" tabIndex={0} title="Open panel · drag to move" aria-label={label+'. Open panel'} {...pillGesture}>{orb}<span className="hc-pill-label" aria-live="polite">{label}</span><Wave level={level} active={active}/></div></div>;
+ if(mode==='pill')return <div className={'hc-root mode-pill state-'+state} style={rimLevel}><div className="hc-pill hc-rim"><div className="hc-pill-open" role="button" tabIndex={0} title="Open panel · drag to move" aria-label={label+'. Open panel'} {...pillGesture}>{orb}<span className="hc-pill-label" aria-live="polite">{label}</span><Wave level={level} active={active}/></div>{view.agentRunning&&<button className="hc-stop-pill" title="Stop agent" aria-label="Stop agent" onPointerDown={e=>e.stopPropagation()} onKeyDown={e=>e.stopPropagation()} onClick={stopAgent}><Square size={12}/>Stop</button>}</div></div>;
  return <div className={'hc-root mode-panel state-'+state} style={rimLevel} onKeyDown={e=>{if(e.key==='Escape')setMode('orb');}}>
   <section className="hc-panel hc-rim" onMouseEnter={()=>{hovering.current=true;}} onMouseLeave={()=>{hovering.current=false;}} aria-label="HoiClicky answer">
    <header className="hc-head">
@@ -340,6 +341,7 @@ function FloatingAssistant({level}){
     <div className="hc-title"><strong aria-live="polite">{label}</strong>{view.model&&<span className="hc-model">{view.model}</span>}</div>
     {active&&<Wave level={level} active/>}
     <div className="hc-head-actions">
+     {view.agentRunning&&<button className="hc-agent-stop" title="Stop agent" aria-label="Stop agent" onClick={stopAgent}><Square size={12}/>Stop</button>}
      <button className={'hc-icon'+(pinned?' on':'')} aria-pressed={pinned} title={pinned?'Unpin · folds away when idle':'Pin · stays open'} aria-label={pinned?'Unpin panel':'Pin panel'} onClick={()=>setPinned(v=>!v)}>{pinned?<PinOff size={15}/>:<Pin size={15}/>}</button>
      <button className="hc-icon" title="Fold into orb (Esc)" aria-label="Fold into orb" onClick={()=>setMode('orb')}><Minimize2 size={15}/></button>
     </div>
@@ -363,6 +365,7 @@ function FloatingAssistant({level}){
     <button disabled={!view.answer} onClick={readAloud}>{speaking?<Square size={13}/>:<Volume2 size={14}/>}{speaking?'Stop reading':'Read aloud'}</button>
     <span className="spacer"/>
     <button onClick={()=>api.window('open')}><ExternalLink size={14}/>Open chat</button>
+    <button onClick={()=>api.window('quit')}><X size={14}/>Quit</button>
    </footer>
    <Grip edge="left"/><Grip edge="right"/><Grip edge="bottom"/><Grip edge="corner-left"/><Grip edge="corner"/>
   </section>

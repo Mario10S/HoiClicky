@@ -269,7 +269,13 @@ html:has(.hc-root),body:has(.hc-root),body:has(.hc-root) #root{background:transp
 @keyframes hc-breathe{50%{filter:brightness(1.15);box-shadow:inset 0 1px 2px #fff9,0 0 26px #b598e266}}
 
 /* Pill */
-.hc-pill{width:100%;height:48px;border-radius:24px;display:flex;align-items:center;gap:11px;padding:0 16px 0 7px;background:linear-gradient(135deg,var(--hc-ink-raised),var(--hc-ink));box-shadow:0 0 0 1px #0000004d,0 2px 6px #00000073;cursor:grab;touch-action:none;user-select:none}
+.hc-pill{width:100%;height:48px;border-radius:24px;display:flex;align-items:center;gap:7px;padding:0 7px;background:linear-gradient(135deg,var(--hc-ink-raised),var(--hc-ink));box-shadow:0 0 0 1px #0000004d,0 2px 6px #00000073}
+.hc-pill-open{height:100%;min-width:0;flex:1;display:flex;align-items:center;gap:11px;padding:0 4px 0 0;text-align:left;cursor:grab;touch-action:none;user-select:none}
+.hc-stop-pill,.hc-agent-stop{display:flex;align-items:center;justify-content:center;gap:5px;border:1px solid #f29aab55;border-radius:9px;color:var(--hc-rose);background:#f29aab12;font-size:12px;font-weight:600;white-space:nowrap;-webkit-app-region:no-drag}
+.hc-stop-pill{height:32px;padding:0 9px;border-radius:16px}
+.hc-agent-stop{height:30px;padding:0 9px}
+.hc-stop-pill:hover,.hc-agent-stop:hover{background:#f29aab24}
+.hc-stop-pill:focus-visible,.hc-agent-stop:focus-visible{outline:2px solid var(--hc-rose);outline-offset:2px}
 .hc-pill .hc-core{width:34px;height:34px;flex-shrink:0}
 .hc-pill-label{flex:1;min-width:0;font-family:"Segoe UI Variable Display","Segoe UI",sans-serif;font-size:14px;font-weight:600;letter-spacing:.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .hc-wave{display:flex;align-items:center;gap:3px;height:22px}
