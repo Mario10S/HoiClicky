@@ -25,6 +25,16 @@ Preserve the upstream MIT license and attribution in [LICENSE](LICENSE). Do not 
 - Optional official Sign in with ChatGPT flow and local Ollama provider with model selection.
 - Optional Claude provider (`backend/Providers/ClaudeCodeProvider.cs`) that runs the user's own Claude Code CLI headless with tools disabled; sign-in uses Claude Code's browser login (`claude auth login`). Prompt and screenshot travel over stdin only, with `--no-session-persistence`. See the README's Claude connection section.
 - Configurable push-to-talk with one key or two keys held together (Key 2 = None; Space cannot be used alone; rules in `backend/TalkKeys.cs`); local Whisper transcription when installed; transcript is sent on release.
+- Agent mode for Claude:
+  - Agent chip, plus self-activation when the user asks for it (`[[AGENT_MODE]]` marker).
+  - Tools: workspace files, commands, mouse/keyboard via `backend/DesktopMcp.cs` (started as `HoiClicky.Service --mcp-desktop`), and web.
+  - Approval modes ask, files and auto, decided by `backend/Providers/AgentPolicy.cs`. `ClaudeAgentRunner.cs` answers Claude Code's `can_use_tool` control requests and shows Allow/Deny cards in the chat and floating panel.
+  - Click preview through the companion cursor, a Stop button, and a 5-minute approval timeout.
+  - The workspace folder is optional. Without one, the agent runs from `%LOCALAPPDATA%\HoiClicky\agent-home` with a desktop/web-focused prompt.
+- App control ("Jarvis"):
+  - With Claude, the chat sends the app state (`appContext` in `desktop/src/app-commands.mjs`), and `backend/Providers/AppCommands.cs` tells Claude to end replies with `[[APP {...}]]` markers.
+  - Available actions: new chat, open settings/chat, find or open a saved chat, stop speaking, and changing the model, provider, screen, microphone, speak answers, talk keys, sound, volume, agent, agent approvals and agent tools.
+  - `planAppAction` checks each action. Changes that widen Claude's access (screen or microphone on, broader approvals or tools) are confirmed through the approval card (`confirmAction`). The chat appends a "Done / Could not do" summary.
 - Response formatting, optional speech output/completion chime, and local MP3 completion sound.
 - Floating assistant (`FloatingAssistant` in `desktop/src/main.jsx`, window logic in `desktop/electron/island-motion.cjs`) has three states: orb, status pill and a glass answer panel. The panel shows the full formatted answer, has a follow-up field (sent through the chat window via `island-ask`), Copy, Read aloud, Open chat and Pin buttons, and folds back into the orb after 30 s idle unless pinned. The orb and pill can be dragged anywhere; the panel moves by its header and resizes from its edges and corners. Windows cannot edge-resize transparent windows, so the renderer sends pointer deltas (`island-drag`). Position and panel size are remembered in `island.json` in Electron's user data. A rim light shows state: lavender orbits while thinking, mint follows the voice level while listening, rose marks errors.
 - Local conversation persistence and recent-message context for follow-ups.
@@ -78,6 +88,29 @@ Builds and these focused checks passed when `v0.2.0-beta.1` was prepared. They d
 Latest results (Claude provider and single-key push-to-talk, 2026-11-23): backend Release build succeeded with 0 warnings; `dotnet run --project tests/Providers/Providers.csproj` printed PASS for the Claude, push-to-talk and Ollama checks; `node --test tests/Desktop/*.test.mjs` passed 5/5; `npm run build` succeeded. A live Claude Max text answer and screen answer were verified through the backend protocol. Still needs manual Windows checks: single-key hold-to-talk with a real microphone, and Claude browser sign-in on a signed-out PC.
 
 Floating panel redesign (2026-11-23): `npm run build` succeeded, desktop tests passed 5/5, provider checks passed, and `node --check` passed for the Electron files. The orb, listening pill, answer panel, thinking state and error state were rendered with sample data in an offscreen Electron window and reviewed visually. The real window uses content protection, so screenshots of it show black. Still needs live checks: dragging and resizing on mixed-DPI and multi-monitor setups, typing follow-ups from the panel, and the 30 s auto-fold.
+
+Agent mode (2026-11-23):
+- Checks: backend build had 0 warnings, provider checks printed PASS including the new agent checks, desktop tests passed 5/5, and `npm run build` succeeded.
+- Live Claude runs through the service protocol, each with a scratch workspace:
+  - ask + Allow created the file.
+  - ask + Deny created nothing, and Claude stopped and explained.
+  - files mode created the file without a prompt.
+  - A PowerShell command ran after approval.
+  - Claude Code listed the five `mcp__desktop__*` tools.
+- The desktop MCP server answered `initialize`/`tools/list`, returned a 1280x720 screenshot of a 2560x1440 monitor, and rejected an out-of-range click.
+- The approval card was rendered and reviewed in the floating panel.
+- Not yet verified live: a real approved click/typing sequence, the companion-cursor click preview, Stop during a long run, and self-activation from chat.
+
+App control and optional workspace (2026-11-23):
+- Checks: desktop tests passed 11/11 (new app-command checks), provider checks printed PASS (agent without workspace, app control prompt), the backend built with 0 warnings, and `npm run build` succeeded.
+- Live Claude runs:
+  - "Model to Opus, talk key only F8, new chat" produced exactly those three markers.
+  - "Screen on and read answers aloud" produced only the speak-answers marker and asked for the user's OK for the screen.
+  - A plain question produced no marker.
+  - An agent run without a workspace started and used the desktop-focused prompt.
+- Not yet verified in the live UI: running the actions, the confirmation card for sensitive changes, and new chat or open chat switching.
+
+Next recommended task: live-test agent clicks on a harmless app (for example Notepad) and tune the screenshot/click loop, then return to the screenshot review step below.
 
 ## Working with Claude
 

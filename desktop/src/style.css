@@ -131,3 +131,31 @@ html:has(.hc-root),body:has(.hc-root),body:has(.hc-root) #root{background:transp
 .hc-panel:hover .hc-grip-corner::after{border-color:var(--hc-lilac)}
 
 @media (prefers-reduced-motion:reduce){.hc-root *,.hc-root *::before{animation:none!important;transition:none!important}}
+
+/* Agent mode: chip, stop button, settings notes and the approval card shared by chat and floating panel. */
+.chip.agent-chip.selected{border-color:#8fe3c880;background:#8fe3c81a;color:#c9f4e6}
+.agent-stop{display:flex;align-items:center;gap:6px;height:34px;padding:0 12px;margin-right:8px;border-radius:10px;border:1px solid #f29aab66;color:#f6c2cc;font-size:12px;font-weight:600;background:#f29aab14}
+.agent-stop:hover{background:#f29aab26}
+.agent-warning{margin-top:10px;padding:10px 12px;border-radius:10px;border:1px solid #f29aab55;background:#f29aab12;color:#f6c9d1!important}
+.workspace-path{word-break:break-all}
+.card .setting .primary{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+
+.approval{--ap-lilac:#c6aef3;margin:14px 0;padding:14px 14px 12px;border-radius:14px;background:linear-gradient(180deg,#26203299,#1b1824cc);box-shadow:inset 0 0 0 1px #c6aef359,0 0 0 4px #c6aef30f;outline:none;animation:approval-in .22s ease-out}
+.approval:focus-visible{box-shadow:inset 0 0 0 1px var(--ap-lilac),0 0 0 4px #c6aef326}
+.approval-head{display:flex;gap:11px;align-items:flex-start}
+.approval-icon{width:32px;height:32px;flex-shrink:0;display:grid;place-items:center;border-radius:10px;background:#c6aef326;color:var(--ap-lilac)}
+.approval-text{display:flex;flex-direction:column;gap:2px;min-width:0}
+.approval-kicker{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#a39bb5;font-family:"Cascadia Code",Consolas,monospace}
+.approval-text strong{font-size:14.5px;font-weight:600;color:#f1ecf8;overflow-wrap:anywhere;line-height:1.4}
+.approval .approval-more{margin:8px 0 0 43px;padding:0;font-size:12px;color:#c6aef3;text-decoration:underline;text-underline-offset:3px}
+.approval-detail{margin:8px 0 0;max-height:180px;overflow:auto;padding:10px 12px;border-radius:9px;background:#0d0c12;color:#d9d3e4;font:12px/1.55 "Cascadia Code",Consolas,monospace;white-space:pre-wrap;overflow-wrap:anywhere}
+.approval-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:12px}
+.approval-actions button{height:32px;padding:0 16px;border-radius:9px;font-size:13px;font-weight:600}
+.approval .approval-deny{color:#d8d1e4;box-shadow:inset 0 0 0 1px #ffffff26}
+.approval-deny:hover:not(:disabled){background:#ffffff10}
+.approval .approval-allow{background:var(--ap-lilac);color:#2b2140}
+.approval-allow:hover:not(:disabled){filter:brightness(1.08)}
+.approval-actions button:disabled{opacity:.5;cursor:default}
+.hc-body .approval{margin:4px 0 12px}
+@keyframes approval-in{from{opacity:0;transform:translateY(4px)}}
+@media (prefers-reduced-motion:reduce){.approval{animation:none}}

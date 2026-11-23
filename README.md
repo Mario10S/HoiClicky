@@ -47,6 +47,22 @@ The optional Claude provider runs the user's own Claude Code CLI (`claude -p`) i
 - `ANTHROPIC_API_KEY` and `ANTHROPIC_AUTH_TOKEN` are removed from Claude Code's environment so the browser login is used, even when a stale key is set in Windows.
 - Each request starts a Claude Code process, which adds a few seconds of latency.
 
+## Agent mode (Claude)
+
+With Claude selected, the **Agent** chip in the chat lets Claude act on the PC instead of only answering. Claude can also switch it on itself when you explicitly ask it to do a task in agent mode; the chat says so when that happens.
+
+- **Workspace folder:** optional. Without one, Claude runs from an empty folder of its own (`%LOCALAPPDATA%\HoiClicky\agent-home`), focuses on desktop and web tasks such as closing windows or clicking buttons, and file access outside it asks first.
+- **Tools**, each switchable in Settings → Agent mode: files in the workspace folder, PowerShell/terminal commands, mouse and keyboard (screenshot, click, type, keys, scroll through HoiClicky's own desktop MCP server), and web search/fetch.
+- **Approvals**:
+  - *Ask before every change* (default): every edit, command, click and keystroke shows an Allow/Deny card in the chat and the floating panel.
+  - *Workspace files freely*: edits inside the workspace run without asking; everything else still asks.
+  - *Autonomous*: nothing asks. It is not recommended: Claude can then delete files, run any command and click anything.
+- **What never asks:** reading inside the workspace and taking screenshots. Screenshots also respect the screen permission.
+- **Click preview:** before a click or scroll, the companion cursor shows the target.
+- **Stop:** the Stop button ends the agent at once and denies anything still pending. Unanswered approvals are denied after five minutes.
+- **How it runs:** Claude Code runs with `--permission-prompt-tool stdio`, so every tool request reaches HoiClicky first (`backend/Providers/AgentPolicy.cs` decides, `ClaudeAgentRunner.cs` asks the user). Sessions are not persisted.
+- **Limits:** click coordinates come from a scaled screenshot and can miss, and the screen can change between screenshot and click. Elevated (administrator) windows ignore simulated input.
+
 ## Privacy and local files
 
 - OAuth credentials are protected with Windows DPAPI under `%LOCALAPPDATA%\HoiClicky\credentials.dpapi`.

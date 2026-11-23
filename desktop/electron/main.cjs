@@ -54,17 +54,21 @@ app.whenReady().then(()=>{
  service.stdin.on('error',()=>fail('The local service connection closed. Restart HoiClicky.'));
  readline.createInterface({input:service.stdout}).on('line',line=>{try{const data=JSON.parse(line);if(data.eventName){if(data.eventName==='point'){lastPoint={x:data.x,y:data.y};guidePointer(data.x,data.y);}else emit(data);return;}const p=pending.get(data.id);if(p){pending.delete(data.id);data.error?p.reject(new Error(data.error)):p.resolve(data.result);}}catch{}});
  ipcMain.handle('status',()=>call('status'));
- for(const method of ['connect','disconnect','claudeConnect','claudeDisconnect','models','voice','voiceStop'])ipcMain.handle(method,()=>call(method));
+ for(const method of ['connect','disconnect','claudeConnect','claudeDisconnect','models','voice','voiceStop','agentStop'])ipcMain.handle(method,()=>call(method));
+ // Agent approvals can be answered from the chat window or the floating panel.
+ ipcMain.handle('approve',(event,data)=>{if(event.sender!==main.webContents&&event.sender!==island?.webContents)throw Error('Invalid sender');if(typeof data?.id!=='string'||typeof data?.allow!=='boolean')throw Error('Invalid approval');return call('approve',{id:data.id.slice(0,200),allow:data.allow});});
+ ipcMain.handle('confirm-action',(event,data)=>{if(event.sender!==main.webContents)throw Error('Invalid sender');if(typeof data?.title!=='string'||typeof data?.detail!=='string')throw Error('Invalid confirmation');return call('confirmAction',{title:data.title.slice(0,200),detail:data.detail.slice(0,1000)});});
+ ipcMain.handle('pick-workspace',async event=>{if(event.sender!==main.webContents)throw Error('Invalid sender');const choice=await dialog.showOpenDialog(main,{title:'Choose a workspace folder for agent mode',properties:['openDirectory','createDirectory']});return choice.canceled?null:choice.filePaths[0]||null;});
  ipcMain.handle('settings',(_,data)=>{
   if(typeof data?.screen!=='boolean'||typeof data?.microphone!=='boolean'||typeof data?.model!=='string')throw Error('Invalid settings');
   return call('settings',data);
  });
  ipcMain.handle('ask',async(_,data)=>{
-  if(typeof data?.question!=='string'||typeof data?.model!=='string'||typeof data?.screen!=='boolean'||data.question.length>32000)throw Error('Invalid question');
+  if(typeof data?.question!=='string'||typeof data?.model!=='string'||typeof data?.screen!=='boolean'||data.question.length>32000||(data.agent!==undefined&&typeof data.agent!=='boolean'))throw Error('Invalid question');
   lastPoint=null;
   const answer=await call('ask',data);
   const requested=/^(?:please\s+)?(?:click|press|tap|activate)\b|\b(?:please|can you|could you|would you)\s+(?:please\s+)?(?:click|press|tap|activate)\b|\bplease\s+do\s+(?:it|that)\b/i.test(data.question.trim());
-  if(!data.screen||!requested||!lastPoint)return answer;
+  if(data.agent||!data.screen||!requested||!lastPoint)return answer;
   const target=lastPoint;lastPoint=null;
   try{
    const info=await call('prepareClick',target);
