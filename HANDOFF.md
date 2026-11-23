@@ -145,3 +145,5 @@ After each meaningful change, update this file with the current behavior, open p
 - A toggle and configurable appearance for the companion cursor.
 - Faster cursor rendering and reliable targeting across displays with different scaling.
 - A clear preview and approval flow for screen context and requested actions.
+
+- Voice output update (2026-11-23): answer speech is enabled by default with a setting to turn it off. Added local Piper voices (German Thorsten high and English Lessac medium), per-user model download, voice preview, stop control, and optional ElevenLabs. Piper is installed locally with Python and its German model is stored under the user's Electron data folder; no chat answer text leaves the PC when Piper is selected. ElevenLabs only receives the answer text and requires the user's own API key, encrypted with Electron safeStorage. `npm run build --prefix desktop` passed; desktop Node tests passed 10/10; Piper generated a test WAV successfully. Live listening and in-app playback still need confirmation. Piper upstream engine is GPL-3.0; voice model licenses vary, so inspect each model card before redistributing voices.
