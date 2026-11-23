@@ -4,18 +4,30 @@ const {spawn}=require('node:child_process');const path=require('node:path');cons
 const {registerSounds}=require('./completion-sound.cjs');
 const {attachIslandMotion}=require('./island-motion.cjs');
 let stopIslandMotion=()=>{};
-let main,island,service,pointer,pointerTimer,pointing=null,lastPoint=null,seq=0;const pending=new Map();
+let main,island,service,pointer,pointerTimer,trail,trailTimer,pointing=null,lastPoint=null,seq=0;const pending=new Map();
+function clearTrail(){clearTimeout(trailTimer);if(trail&&!trail.isDestroyed())trail.destroy();trail=null;}
+function showTrail(startX,startY,target){
+ clearTrail();
+ const margin=32,left=Math.floor(Math.min(startX,target.x)-margin),top=Math.floor(Math.min(startY,target.y)-margin);
+ const width=Math.ceil(Math.abs(target.x-startX)+margin*2),height=Math.ceil(Math.abs(target.y-startY)+margin*2);
+ trail=new BrowserWindow({x:left,y:top,width,height,frame:false,transparent:true,backgroundColor:'#00000000',hasShadow:false,alwaysOnTop:true,focusable:false,skipTaskbar:true,resizable:false,show:false,webPreferences:{contextIsolation:true,nodeIntegration:false,sandbox:true}});
+ const shown=trail;shown.setIgnoreMouseEvents(true);shown.setContentProtection(true);shown.setAlwaysOnTop(true,'screen-saver');
+ shown.loadFile(path.join(__dirname,'trail.html'),{query:{x1:String(startX-left),y1:String(startY-top),x2:String(target.x-left),y2:String(target.y-top)}});
+ shown.once('ready-to-show',()=>{if(!shown.isDestroyed())shown.showInactive();});
+ trailTimer=setTimeout(()=>{if(!shown.isDestroyed())shown.destroy();if(trail===shown)trail=null;},4100);
+}
 function guidePointer(x,y){
  if(!Number.isFinite(x)||!Number.isFinite(y)||!pointer||pointer.isDestroyed())return;
  const target=screen.screenToDipPoint({x:Math.round(x),y:Math.round(y)});
  const [startX,startY]=pointer.getPosition();
- pointing={startX,startY,target,start:Date.now()};
+ showTrail(startX+21,startY+12,target);
+ pointing={startX,startY,target:{x:target.x-21,y:target.y-12},start:Date.now()};
 }
 function setPointer(enabled){
  clearInterval(pointerTimer);
  if(pointer&&!pointer.isDestroyed())pointer.destroy();
  pointer=null;
- if(!enabled)return;
+ if(!enabled){clearTrail();pointing=null;return;}
  const pos=screen.getCursorScreenPoint();
  pointer=new BrowserWindow({x:pos.x+20,y:pos.y+20,width:32,height:32,frame:false,transparent:true,backgroundColor:'#00000000',hasShadow:false,alwaysOnTop:true,focusable:false,skipTaskbar:true,resizable:false,show:false,webPreferences:{contextIsolation:true,nodeIntegration:false,sandbox:true}});
  pointer.setIgnoreMouseEvents(true);pointer.setContentProtection(true);pointer.setAlwaysOnTop(true,'screen-saver');
@@ -24,7 +36,7 @@ function setPointer(enabled){
  shown.once('ready-to-show',()=>{if(!shown.isDestroyed())shown.showInactive();});
  let lastX=pos.x,lastY=pos.y;
  // Sample frequently; Windows and Electron still determine the actual update rate.
- pointerTimer=setInterval(()=>{if(shown.isDestroyed())return;if(pointing){const elapsed=Date.now()-pointing.start;if(elapsed<650){const t=Math.min(1,elapsed/650),e=1-(1-t)**3;shown.setPosition(Math.round(pointing.startX+(pointing.target.x-pointing.startX)*e),Math.round(pointing.startY+(pointing.target.y-pointing.startY)*e));return;}if(elapsed<3650)return;pointing=null;lastX=NaN;lastY=NaN;}const next=screen.getCursorScreenPoint();if(next.x!==lastX||next.y!==lastY){lastX=next.x;lastY=next.y;shown.setPosition(next.x+20,next.y+20);}},4);
+ pointerTimer=setInterval(()=>{if(shown.isDestroyed())return;if(pointing){const elapsed=Date.now()-pointing.start;if(elapsed<1200){const t=Math.min(1,elapsed/1200),e=t*t*(3-2*t);shown.setPosition(Math.round(pointing.startX+(pointing.target.x-pointing.startX)*e),Math.round(pointing.startY+(pointing.target.y-pointing.startY)*e));return;}if(elapsed<3700)return;if(elapsed<4500){const next=screen.getCursorScreenPoint(),t=(elapsed-3700)/800,e=t*t*(3-2*t);shown.setPosition(Math.round(pointing.target.x+(next.x+20-pointing.target.x)*e),Math.round(pointing.target.y+(next.y+20-pointing.target.y)*e));return;}pointing=null;lastX=NaN;lastY=NaN;}const next=screen.getCursorScreenPoint();if(next.x!==lastX||next.y!==lastY){lastX=next.x;lastY=next.y;shown.setPosition(next.x+20,next.y+20);}},4);
 }
 function emit(data){for(const w of [main,island])if(w&&!w.isDestroyed())w.webContents.send('event',data);}
 function call(method,args){return new Promise((resolve,reject)=>{const id=++seq;pending.set(id,{resolve,reject});service.stdin.write(JSON.stringify({id,method,args})+'\n');});}

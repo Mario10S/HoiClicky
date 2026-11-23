@@ -27,7 +27,7 @@ Preserve the upstream MIT license and attribution in [LICENSE](LICENSE). Do not 
 - Response formatting, optional speech output/completion chime, and local MP3 completion sound.
 - Local conversation persistence and recent-message context for follow-ups.
 - Windows DPAPI protection for OAuth tokens; settings include screen/microphone permission controls and disconnect.
-- Experimental companion cursor follows the mouse and can point at a model-estimated target. Explicit click requests can offer a confirmation for named, invokable Windows accessibility controls. This is not yet verified with a live click.
+- Experimental companion cursor follows the mouse and can point at a model-estimated target, with a faint path, target marker, and animated return. Explicit click requests can offer a confirmation for named, invokable Windows accessibility controls. The updated animation and live click still need Windows verification.
 
 ## Important gaps
 
