@@ -8,10 +8,14 @@ namespace HoiClicky;
 internal static class ScreenCapture
 {
     public static byte[] CaptureCursorMonitorJpeg()
+        => CaptureCursorMonitorJpeg(out _);
+
+    public static byte[] CaptureCursorMonitorJpeg(out Rectangle capturedBounds)
     {
         NativeMethods.GetCursorPos(out var cursor);
         var screen = Screen.FromPoint(new Point(cursor.X, cursor.Y));
         var bounds = screen.Bounds;
+        capturedBounds = bounds;
         using var bitmap = new Bitmap(bounds.Width, bounds.Height, PixelFormat.Format24bppRgb);
         using (var graphics = Graphics.FromImage(bitmap))
             graphics.CopyFromScreen(bounds.Left, bounds.Top, 0, 0, bounds.Size, CopyPixelOperation.SourceCopy);

@@ -1,5 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
-<PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net8.0-windows</TargetFramework><UseWindowsForms>true</UseWindowsForms><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable><AssemblyName>HoiClicky.Service</AssemblyName></PropertyGroup>
+<PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net8.0-windows</TargetFramework><UseWindowsForms>true</UseWindowsForms><UseWPF>true</UseWPF><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable><AssemblyName>HoiClicky.Service</AssemblyName></PropertyGroup>
 <ItemGroup>
 <Compile Include="..\OAuthService.cs" Link="OAuthService.cs"/><Compile Include="..\OpenAiResponses.cs" Link="OpenAiResponses.cs"/><Compile Include="..\LocalSettings.cs" Link="LocalSettings.cs"/><Compile Include="..\DpapiStore.cs" Link="DpapiStore.cs"/><Compile Include="..\ScreenCapture.cs" Link="ScreenCapture.cs"/><Compile Include="..\NativeMethods.cs" Link="NativeMethods.cs"/><Compile Include="..\VoiceInput.cs" Link="VoiceInput.cs"/>
 <None Include="..\SpeechHost.exe" Link="SpeechHost.exe" CopyToOutputDirectory="PreserveNewest"/>
