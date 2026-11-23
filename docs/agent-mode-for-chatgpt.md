@@ -6,6 +6,8 @@ This file is a hand-off for an AI coding assistant (or a human contributor). It 
 
 ## Ready-to-use prompt
 
+This is the original implementation prompt, retained as project history. ChatGPT agent mode is implemented; see the status note above and `HANDOFF.md` for current verification.
+
 Paste this into the coding assistant, from the repository root:
 
 > Read `CLAUDE.md`, `HANDOFF.md`, `README.md` and `docs/agent-mode-for-chatgpt.md`. Implement agent mode for the ChatGPT provider exactly as that document describes.

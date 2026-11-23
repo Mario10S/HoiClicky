@@ -128,7 +128,7 @@ Windows, tabs and monitors (2026-11-23):
 - Local MCP run: 2 monitors detected (2560x1440 and 1080x1920 portrait), all-monitor screenshot at 1568x827, monitor-2 screenshot at 720x1280, invalid monitor rejected, 7 windows and 11 Opera tabs listed with the active tab marked.
 - Not yet verified live: `activate_tab`, `focus_window`, `close_window` and Claude using them.
 
-Agent mode for ChatGPT users is not built yet. `docs/agent-mode-for-chatgpt.md` holds the design, the reusable pieces, the step order, a safety checklist and a ready-to-paste prompt for the implementing assistant.
+ChatGPT agent mode is implemented; `docs/agent-mode-for-chatgpt.md` records its design and known limits. Live ChatGPT account and desktop-action verification remain outstanding.
 
 Next recommended task: live-test agent clicks on a harmless app (for example Notepad) and tune the screenshot/click loop, then return to the screenshot review step below.
 
@@ -151,3 +151,4 @@ After each meaningful change, update this file with the current behavior, open p
 
 
 - ChatGPT agent mode (2026-11-23): added a Responses API tool loop with `store:false`, function-call replay, OAuth token usage, workspace file read/list/search/write/edit tools, bounded PowerShell, HTTPS fetch and existing desktop MCP tools. All tools pass AgentPolicy and existing approvals; Stop cancels the Responses stream, command process and MCP process. Screenshots/tool results remain in memory. Provider tests cover fake response replay and denied writes; desktop tests pass 16/16; backend Release and Vite production builds pass. Live ChatGPT-account and desktop-action verification remains outstanding.
+- ChatGPT agent follow-up (2026-11-23): fixed app-control validation so a ChatGPT reply can switch ChatGPT agent mode on; Ollama remains unsupported. Removed the stale note saying the feature was not built and marked the original implementation prompt as historical. Checks: `node --test tests/Desktop/*.test.mjs` passed 19/19, `dotnet run --project tests\Providers\Providers.csproj` passed, `npm run build --prefix desktop` passed, and `dotnet build backend\HoiClicky.Service.csproj -c Release -o backend\bin\verification` succeeded with 0 warnings/errors. HoiClicky was already open with overlapping active windows, so no live ChatGPT account/action test was attempted; live verification remains outstanding.

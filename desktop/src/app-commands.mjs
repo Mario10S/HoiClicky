@@ -1,4 +1,4 @@
-// Claude can operate HoiClicky itself by ending a reply with markers like [[APP {"action":"new_chat"}]].
+// Claude and ChatGPT can operate HoiClicky itself by ending a reply with markers like [[APP {"action":"new_chat"}]].
 // This module parses those markers and turns each one into a checked, described change. It never applies anything.
 const MARKER=/\[\[APP\s+(\{[\s\S]*?\})\s*\]\]/g;
 const MAX_ACTIONS=8;
@@ -26,7 +26,7 @@ const onOff=value=>value?'on':'off';
 const bool=value=>value===true||value===false;
 
 // ctx: {status, models:[{Slug,Name}], sound:{mode,volume,name}, read, agentOn, talkKeys:[[code,name]], chats:[{id,title}]}
-// Returns {ok:true,label,sensitive,change} or {ok:false,error}. "sensitive" changes widen what Claude may do and need the user's OK.
+// Returns {ok:true,label,sensitive,change} or {ok:false,error}. "sensitive" changes widen what the agent may do and need the user's OK.
 export function planAppAction(action,ctx){
  const fail=error=>({ok:false,error});
  const ok=(label,change,sensitive=false)=>({ok:true,label,change,sensitive});
@@ -69,7 +69,7 @@ function planSetting(setting,value,ctx,status,ok,fail){
   case 'volume':{const volume=Number(value);return Number.isFinite(volume)&&volume>=0&&volume<=1?ok('Volume → '+Math.round(volume*100)+'%',{type:'sound',patch:{volume}}):fail('Volume must be between 0 and 1.');}
   case 'agent':{
    if(!bool(value))return fail('Agent needs true or false.');
-   if(value&&status.provider!=='claude')return fail('Agent mode needs Claude as the provider.');
+   if(value&&!['claude','chatgpt'].includes(status.provider))return fail('Agent mode needs Claude or ChatGPT as the provider.');
    return ok('Agent mode '+onOff(value),{type:'agent',on:value});
   }
   case 'agent_approval':{
@@ -86,7 +86,7 @@ function planSetting(setting,value,ctx,status,ok,fail){
  }
 }
 
-// What Claude is told about the app: the current state and the choices it may use.
+// What Claude or ChatGPT is told about the app: the current state and the choices it may use.
 export function appContext(ctx){
  const s=ctx.status||{};
  return {

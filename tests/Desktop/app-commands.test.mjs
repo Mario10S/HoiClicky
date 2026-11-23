@@ -32,7 +32,7 @@ test('plans harmless setting changes without confirmation',()=>{
  assert.equal(planAppAction({action:'set',setting:'sound',value:'mp3'},ctx).ok,false);
 });
 
-test('changes that widen what Claude may do need confirmation',()=>{
+test('changes that widen what the agent may do need confirmation',()=>{
  assert.equal(planAppAction({action:'set',setting:'screen',value:true},ctx).sensitive,true);
  assert.equal(planAppAction({action:'set',setting:'screen',value:false},ctx).sensitive,false);
  assert.equal(planAppAction({action:'set',setting:'screens',value:'all'},{...ctx,status:{...ctx.status,screens:'cursor'}}).sensitive,true);
@@ -43,6 +43,8 @@ test('changes that widen what Claude may do need confirmation',()=>{
  assert.equal(planAppAction({action:'set',setting:'agent_approval',value:'ask'},{...ctx,status:{...ctx.status,agent:{...ctx.status.agent,approval:'auto'}}}).sensitive,false);
  assert.equal(planAppAction({action:'set',setting:'agent_tools',value:['files','commands']},ctx).sensitive,true);
  assert.equal(planAppAction({action:'set',setting:'agent_tools',value:[]},ctx).sensitive,false);
+ const chatgpt={...ctx,status:{...ctx.status,provider:'chatgpt'}};
+ assert.deepEqual(planAppAction({action:'set',setting:'agent',value:true},chatgpt).change,{type:'agent',on:true});
 });
 
 test('chat actions and unknown actions',()=>{
@@ -53,7 +55,7 @@ test('chat actions and unknown actions',()=>{
  assert.equal(planAppAction({action:'set',setting:'agent',value:true},{...ctx,status:{...ctx.status,provider:'ollama'}}).ok,false);
 });
 
-test('app context lists state and choices for Claude',()=>{
+test('app context lists state and choices for Claude and ChatGPT',()=>{
  const context=appContext({...ctx,page:'chat'});
  assert.equal(context.talk_keys.choices.F8,119);
  assert.deepEqual(context.models.map(m=>m.slug),['sonnet','opus']);
