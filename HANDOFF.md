@@ -27,6 +27,7 @@ Preserve the upstream MIT license and attribution in [LICENSE](LICENSE). Do not 
 - Response formatting, optional speech output/completion chime, and local MP3 completion sound.
 - Local conversation persistence and recent-message context for follow-ups.
 - Windows DPAPI protection for OAuth tokens; settings include screen/microphone permission controls and disconnect.
+- Experimental companion cursor follows the mouse and can point at a model-estimated target. Explicit click requests can offer a confirmation for named, invokable Windows accessibility controls. This is not yet verified with a live click.
 
 ## Important gaps
 
@@ -35,7 +36,8 @@ Preserve the upstream MIT license and attribution in [LICENSE](LICENSE). Do not 
 - No signed installer, auto-updater, comprehensive end-to-end testing, or broad real-device validation.
 - Provider cancellation and recovery from backend/network interruptions need more work.
 - Voice quality and startup latency need testing across real microphones and language setups.
-- Pointer targeting, document reading, dictation into other apps, notes/tasks, and conversation export/rename are not implemented.
+- Document reading, dictation into other apps, notes/tasks, and conversation export/rename are not implemented.
+- Experimental cursor targeting and confirmed control activation need live Windows testing. AI coordinates may be inaccurate, some controls lack an accessible Invoke action, and the screen may change after capture. Review and test confirmation, cancellation, stale targets, mixed DPI, multiple monitors, and accidental action requests before treating this as reliable.
 
 ## Recommended next task: review screen context before sending
 
@@ -47,7 +49,7 @@ Make a small privacy-focused slice before adding more screen features:
 4. Respect the existing screen permission and image-capability checks. A cancelled request must never reach a provider.
 5. Add focused tests for the confirmation/cancel flow and provider-call boundary.
 
-After that, consider region capture and OCR, then cancellation/backend recovery, then encrypted/exportable conversation history and installer packaging. Add pointing, document reading, and cross-app dictation as later modules.
+After that, consider region capture and OCR, then cancellation/backend recovery, then encrypted/exportable conversation history and installer packaging. Improve pointing, and add document reading and cross-app dictation as later modules.
 
 ## Validation commands
 
@@ -73,3 +75,13 @@ Builds and these focused checks passed when `v0.2.0-beta.1` was prepared. They d
 ## Working with Claude
 
 Open this repository in Claude Code and ask it to read `CLAUDE.md` and this handoff. Have it implement only the recommended next task, then review the diff and test results before merging. Do not ask it to publish, release, or send messages as part of coding work.
+
+## Keeping this handoff current
+
+After each meaningful change, update this file with the current behavior, open problems, next steps, and what was actually tested. Move completed items out of the gaps list and keep uncertain or untested behavior clearly labeled. Capture useful ideas as proposals, not promises. Check GitHub for teammate changes before pushing small, reviewable commits; avoid overwriting others' work. Never commit secrets, personal conversations, captures, or local data. Use issues for larger tasks when useful, and link them here if created.
+
+### Ideas to consider
+
+- A toggle and configurable appearance for the companion cursor.
+- Faster cursor rendering and reliable targeting across displays with different scaling.
+- A clear preview and approval flow for screen context and requested actions.
