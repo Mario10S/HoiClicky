@@ -12,7 +12,7 @@ internal interface IAiProvider {
 }
 internal static class AiProviders {
  public static string Selected=>LocalSettings.Current.Provider??(OAuthService.HasCredentials?"chatgpt":"ollama");
- public static IAiProvider Current=>Selected=="ollama"?new OllamaProvider():new ChatGptProvider();
+ public static IAiProvider Current=>Selected switch{"ollama"=>new OllamaProvider(),"claude"=>new ClaudeCodeProvider(),_=>new ChatGptProvider()};
 }
 internal sealed class ChatGptProvider:IAiProvider {
  public async Task<List<AiModel>> ModelsAsync()=>(await OpenAiResponses.ListModelsAsync()).Select(m=>new AiModel(m.Slug,m.Name,null)).ToList();

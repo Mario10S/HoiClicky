@@ -5,8 +5,9 @@ class Program {
  static readonly object outputLock=new();
  static readonly SemaphoreSlim gate=new(1);
  static readonly VoiceInput voice=new();
+ static ClaudeStatus claude=new(false,false,null);
  static void Emit(object value){lock(outputLock)Console.WriteLine(JsonSerializer.Serialize(value));}
- static object Status()=>new {connected=OAuthService.HasCredentials,account=OAuthService.HasCredentials?OAuthService.AccountLabel:null,screen=LocalSettings.Current.AllowScreenCapture,microphone=LocalSettings.Current.AllowMicrophone,provider=AiProviders.Selected,model=LocalSettings.Current.Model,key1=LocalSettings.Current.TalkKey1,key2=LocalSettings.Current.TalkKey2};
+ static object Status()=>new {connected=OAuthService.HasCredentials,account=OAuthService.HasCredentials?OAuthService.AccountLabel:null,screen=LocalSettings.Current.AllowScreenCapture,microphone=LocalSettings.Current.AllowMicrophone,provider=AiProviders.Selected,model=LocalSettings.Current.Model,key1=LocalSettings.Current.TalkKey1,key2=LocalSettings.Current.TalkKey2,claude=new{installed=claude.Installed,loggedIn=claude.LoggedIn,account=claude.Label}};
  static async Task Main(){using var keys=new HoldKeyMonitor(OnHold);var requests=new List<Task>();string? line;while((line=await Console.In.ReadLineAsync())!=null){try{var msg=JsonDocument.Parse(line).RootElement.Clone();requests.RemoveAll(task=>task.IsCompleted);requests.Add(Handle(msg));}catch{}}voice.Stop();await Task.WhenAll(requests);voice.Dispose();}
  static bool heldVoice;
  static void OnHold(bool down){
@@ -21,7 +22,9 @@ class Program {
   await gate.WaitAsync();
   try{object? result=null;
    switch(method){
-    case "status":result=Status();break;
+    case "status":claude=await ClaudeCodeAuth.StatusAsync();result=Status();break;
+    case "claudeConnect":claude=await ClaudeCodeAuth.LoginAsync();result=Status();break;
+    case "claudeDisconnect":await ClaudeCodeAuth.LogoutAsync();claude=await ClaudeCodeAuth.StatusAsync();result=Status();break;
     case "connect":await OAuthService.SignInAsync();result=Status();break;
     case "disconnect":OAuthService.Disconnect();result=Status();break;
     case "prepareClick":
@@ -31,11 +34,10 @@ class Program {
     case "models":result=await AiProviders.Current.ModelsAsync();break;
     case "settings":
      var settings=msg.GetProperty("args");LocalSettings.Current.AllowScreenCapture=settings.GetProperty("screen").GetBoolean();LocalSettings.Current.AllowMicrophone=settings.GetProperty("microphone").GetBoolean();LocalSettings.Current.Model=settings.GetProperty("model").GetString();if(settings.TryGetProperty("key1",out var k1)&&settings.TryGetProperty("key2",out var k2)){
-      int[] allowed=[162,163,164,165,160,161,20,32,118,119];
-      if(!allowed.Contains(k1.GetInt32())||!allowed.Contains(k2.GetInt32())||k1.GetInt32()==k2.GetInt32())throw new Exception("Choose two different supported keys.");
+      TalkKeys.Validate(k1.GetInt32(),k2.GetInt32());
       LocalSettings.Current.TalkKey1=k1.GetInt32();LocalSettings.Current.TalkKey2=k2.GetInt32();
      }if(settings.TryGetProperty("provider",out var provider)){
-      var name=provider.GetString();if(name is not ("ollama" or "chatgpt"))throw new Exception("Unsupported AI provider.");
+      var name=provider.GetString();if(name is not ("ollama" or "chatgpt" or "claude"))throw new Exception("Unsupported AI provider.");
       if(AiProviders.Selected!=name)LocalSettings.Current.Model="";
       LocalSettings.Current.Provider=name;
      }LocalSettings.Save();result=Status();break;

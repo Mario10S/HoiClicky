@@ -9,7 +9,8 @@ HoiClicky is an early Windows 11 pre-release. It is an independent Windows port 
 - Compact floating assistant with a chat window and searchable local conversation sidebar.
 - Ask about the current screen on demand. A screenshot is captured only when you send a screen question.
 - Choose a local Ollama model, or optionally connect an eligible ChatGPT account through OpenAI's official Sign in with ChatGPT flow. ChatGPT plan access and available models depend on OpenAI's eligibility and limits; a ChatGPT subscription does not provide API-key access.
-- Hold two configurable keys to record speech, then transcribe locally with Whisper when set up. The transcript is sent automatically after you release the keys.
+- Optionally use Claude through your own installed [Claude Code](https://claude.com/claude-code). Sign-in opens the browser via Claude Code's official `claude auth login`; usage counts toward your own Claude plan and its limits.
+- Hold one configurable key, or two keys together, to record speech, then transcribe locally with Whisper when set up. The transcript is sent automatically after you release the key.
 - Render formatted answers, choose a completion chime, or select an MP3 from your PC.
 - Keep conversations on this PC and continue them later. Recent text is included for follow-up questions; old screenshots are not resent.
 - Protect OAuth tokens with Windows DPAPI and disconnect from the app's Settings.
@@ -20,7 +21,7 @@ This build is still a work in progress. Screen questions currently capture the m
 
 ## Run from source
 
-Requirements: Windows 11, .NET 8 SDK, Node.js and npm. Ollama is optional for local AI. Network access is required for package restore, ChatGPT sign-in, and cloud requests.
+Requirements: Windows 11, .NET 8 SDK, Node.js and npm. Ollama (local AI) and Claude Code (Claude provider) are optional. Network access is required for package restore, ChatGPT sign-in, and cloud requests.
 
 ```powershell
 git clone https://github.com/Mario10S/HoiClicky.git
@@ -37,13 +38,22 @@ To enable local Whisper speech recognition, run `powershell -ExecutionPolicy Byp
 
 The optional account connection uses OpenAI's documented [Sign in with ChatGPT for open-source apps](https://developers.openai.com/siwc/quickstart/) flow, including dynamic client registration, PKCE and a local callback. The user approves the app and permissions in OpenAI's sign-in flow. Account eligibility, model availability and usage limits are determined by OpenAI. HoiClicky does not use browser cookies, session scraping or a hard-coded API key.
 
+## Claude connection
+
+The optional Claude provider runs the user's own Claude Code CLI (`claude -p`) in headless mode. Anthropic does not offer a sign-in flow for third-party apps, so HoiClicky does not implement its own Claude OAuth: **Sign in with Claude** opens Claude Code's official browser sign-in (`claude auth login`) in a separate window, and Claude Code keeps its own login. HoiClicky never reads or stores Claude credentials. **Sign out** runs `claude auth logout`, which also signs out Claude Code on this PC.
+
+- Requests run with all Claude Code tools disabled (`--tools ""`), without MCP servers, user settings or slash commands, from an empty working folder (`%LOCALAPPDATA%\HoiClicky\claude-work`). Claude only answers; it cannot act on the PC.
+- The question, recent chat text and any explicitly captured screenshot are sent to Claude Code over standard input only, never on the command line or to disk. `--no-session-persistence` keeps Claude Code from saving the conversation.
+- `ANTHROPIC_API_KEY` and `ANTHROPIC_AUTH_TOKEN` are removed from Claude Code's environment so the browser login is used, even when a stale key is set in Windows.
+- Each request starts a Claude Code process, which adds a few seconds of latency.
+
 ## Privacy and local files
 
 - OAuth credentials are protected with Windows DPAPI under `%LOCALAPPDATA%\HoiClicky\credentials.dpapi`.
 - Non-secret preferences are stored in `%LOCALAPPDATA%\HoiClicky\settings.json`.
 - Conversations are stored as plain-text JSON in Electron's user data folder under `conversations` (normally `%APPDATA%\hoiclicky-desktop\conversations`). They are separate from ChatGPT website history.
 - Screenshots and microphone audio are not saved to conversation files. Screen images are sent only when the user sends a screen question; the selected AI provider processes the request.
-- Ollama requests go to the local Ollama service. When ChatGPT is selected, request text and any explicitly captured screenshot are sent to OpenAI.
+- Ollama requests go to the local Ollama service. When ChatGPT is selected, request text and any explicitly captured screenshot are sent to OpenAI. When Claude is selected, they are sent to Anthropic through Claude Code.
 
 ## Development checks
 
