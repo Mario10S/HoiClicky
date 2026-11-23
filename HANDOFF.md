@@ -118,6 +118,18 @@ App control and optional workspace (2026-11-23):
   - An agent run without a workspace started and used the desktop-focused prompt.
 - Not yet verified in the live UI: running the actions, the confirmation card for sensitive changes, and new chat or open chat switching.
 
+Windows, tabs and monitors (2026-11-23):
+- `backend/OpenWindows.cs` lists visible top-level windows (EnumWindows; skips tool, owned and cloaked windows and HoiClicky itself). It reads browser tabs through MSAA (`AccessibleObjectFromWindow`, page-tab role). Opera exposed no UI Automation tree but returned all 11 tabs through MSAA.
+- Desktop MCP:
+  - `screenshot` takes `monitor` (number or `all`).
+  - New tools: `list_windows`, `focus_window`, `activate_tab` and `close_window`.
+- Chat screen questions capture all monitors by default (`ScreenScope` setting / "Screens to include") and append the window and tab summary.
+- Checks: provider checks passed (monitor numbering, listing format, tab matching, policy for the new tools) and desktop tests passed 16/16.
+- Local MCP run: 2 monitors detected (2560x1440 and 1080x1920 portrait), all-monitor screenshot at 1568x827, monitor-2 screenshot at 720x1280, invalid monitor rejected, 7 windows and 11 Opera tabs listed with the active tab marked.
+- Not yet verified live: `activate_tab`, `focus_window`, `close_window` and Claude using them.
+
+Agent mode for ChatGPT users is not built yet. `docs/agent-mode-for-chatgpt.md` holds the design, the reusable pieces, the step order, a safety checklist and a ready-to-paste prompt for the implementing assistant.
+
 Next recommended task: live-test agent clicks on a harmless app (for example Notepad) and tune the screenshot/click loop, then return to the screenshot review step below.
 
 ## Working with Claude
