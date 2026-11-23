@@ -32,6 +32,8 @@ npm install
 npm start
 ```
 
+After the first setup you can simply double-click `Start HoiClicky.cmd` in the repository root. It checks for .NET and Node.js, installs packages on the first run, rebuilds the service and interface (so pulled changes are included), and opens the app without leaving a console window. Some antivirus products flag launcher scripts by mistake; if the file disappears, restore it from quarantine and exclude the folder.
+
 To enable local Whisper speech recognition, run `powershell -ExecutionPolicy Bypass -File ..\speech\setup.ps1` from the `desktop` directory. This downloads Python dependencies and the Whisper model. Microphone capture begins only when push-to-talk is triggered and microphone access is enabled.
 
 ## ChatGPT connection
