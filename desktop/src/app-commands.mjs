@@ -54,6 +54,7 @@ function planSetting(setting,value,ctx,status,ok,fail){
   case 'model':{const model=(ctx.models||[]).find(m=>m.Slug===value||m.Name.toLowerCase()===String(value).toLowerCase());return model?ok('Model → '+model.Name,{type:'setting',patch:{model:model.Slug}}):fail(`Model “${value}” is not available. Choose one from the model list.`);}
   case 'provider':return PROVIDERS.includes(value)?ok('Provider → '+({claude:'Claude',ollama:'Ollama',chatgpt:'ChatGPT'})[value],{type:'setting',patch:{provider:value,model:''}}):fail('Unknown provider '+value+'.');
   case 'screen':return bool(value)?ok('Screen access '+onOff(value),{type:'setting',patch:{screen:value}},value&&!status.screen):fail('Screen needs true or false.');
+  case 'screens':return value==='all'||value==='cursor'?ok(value==='all'?'Screen questions → all monitors':'Screen questions → monitor under the pointer',{type:'setting',patch:{screens:value}},value==='all'&&status.screens==='cursor'):fail('Screens must be all or cursor.');
   case 'microphone':return bool(value)?ok('Microphone '+onOff(value),{type:'setting',patch:{microphone:value}},value&&!status.microphone):fail('Microphone needs true or false.');
   case 'speak_answers':return bool(value)?ok('Speak answers '+onOff(value),{type:'read',on:value}):fail('Speak answers needs true or false.');
   case 'talk_keys':{
@@ -89,7 +90,7 @@ export function appContext(ctx){
  const s=ctx.status||{};
  return {
   page:ctx.page,provider:s.provider,model:s.model,models:(ctx.models||[]).slice(0,30).map(m=>({slug:m.Slug,name:m.Name})),
-  screen:!!s.screen,microphone:!!s.microphone,speak_answers:!!ctx.read,
+  screen:!!s.screen,screens:s.screens||'all',microphone:!!s.microphone,speak_answers:!!ctx.read,
   talk_keys:{key1:s.key1,key2:s.key2??0,choices:Object.fromEntries((ctx.talkKeys||[]).map(([code,name])=>[name,code]))},
   sound:{mode:ctx.sound?.mode,volume:ctx.sound?.volume,custom_mp3:!!ctx.sound?.name},
   agent:{on:!!ctx.agentOn,approval:s.agent?.approval,tools:s.agent?.tools,workspace_chosen:!!s.agent?.workspace},

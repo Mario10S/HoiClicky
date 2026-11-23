@@ -32,6 +32,9 @@ test('plans harmless setting changes without confirmation',()=>{
 test('changes that widen what Claude may do need confirmation',()=>{
  assert.equal(planAppAction({action:'set',setting:'screen',value:true},ctx).sensitive,true);
  assert.equal(planAppAction({action:'set',setting:'screen',value:false},ctx).sensitive,false);
+ assert.equal(planAppAction({action:'set',setting:'screens',value:'all'},{...ctx,status:{...ctx.status,screens:'cursor'}}).sensitive,true);
+ assert.equal(planAppAction({action:'set',setting:'screens',value:'cursor'},{...ctx,status:{...ctx.status,screens:'all'}}).sensitive,false);
+ assert.equal(planAppAction({action:'set',setting:'screens',value:'both'},ctx).ok,false);
  assert.equal(planAppAction({action:'set',setting:'microphone',value:true},ctx).sensitive,false,'already on');
  assert.equal(planAppAction({action:'set',setting:'agent_approval',value:'auto'},ctx).sensitive,true);
  assert.equal(planAppAction({action:'set',setting:'agent_approval',value:'ask'},{...ctx,status:{...ctx.status,agent:{...ctx.status.agent,approval:'auto'}}}).sensitive,false);

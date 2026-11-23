@@ -24,7 +24,7 @@ class Program {
   try{var map=DesktopMcpCore.LoadMapping();if(map is null)return;var (x,y)=DesktopMcpCore.ToScreen(input.GetProperty("x").GetDouble(),input.GetProperty("y").GetDouble(),map);Emit(new{eventName="point",x,y});}catch{}
  }
  static void Emit(object value){lock(outputLock)Console.WriteLine(JsonSerializer.Serialize(value));}
- static object Status()=>new {connected=OAuthService.HasCredentials,account=OAuthService.HasCredentials?OAuthService.AccountLabel:null,screen=LocalSettings.Current.AllowScreenCapture,microphone=LocalSettings.Current.AllowMicrophone,provider=AiProviders.Selected,model=LocalSettings.Current.Model,key1=LocalSettings.Current.TalkKey1,key2=LocalSettings.Current.TalkKey2,claude=new{installed=claude.Installed,loggedIn=claude.LoggedIn,account=claude.Label},agent=new{approval=LocalSettings.Current.AgentApproval,tools=LocalSettings.Current.AgentTools,workspace=LocalSettings.Current.AgentWorkspace}};
+ static object Status()=>new {connected=OAuthService.HasCredentials,account=OAuthService.HasCredentials?OAuthService.AccountLabel:null,screen=LocalSettings.Current.AllowScreenCapture,screens=LocalSettings.Current.ScreenScope,microphone=LocalSettings.Current.AllowMicrophone,provider=AiProviders.Selected,model=LocalSettings.Current.Model,key1=LocalSettings.Current.TalkKey1,key2=LocalSettings.Current.TalkKey2,claude=new{installed=claude.Installed,loggedIn=claude.LoggedIn,account=claude.Label},agent=new{approval=LocalSettings.Current.AgentApproval,tools=LocalSettings.Current.AgentTools,workspace=LocalSettings.Current.AgentWorkspace}};
  static async Task Main(string[] argv){if(argv.Contains("--mcp-desktop")){await DesktopMcp.RunAsync();return;}using var keys=new HoldKeyMonitor(OnHold);var requests=new List<Task>();string? line;while((line=await Console.In.ReadLineAsync())!=null){try{var msg=JsonDocument.Parse(line).RootElement.Clone();requests.RemoveAll(task=>task.IsCompleted);requests.Add(Handle(msg));}catch{}}voice.Stop();await Task.WhenAll(requests);voice.Dispose();}
  static bool heldVoice;
  static void OnHold(bool down){
@@ -69,14 +69,18 @@ class Program {
       var name=provider.GetString();if(name is not ("ollama" or "chatgpt" or "claude"))throw new Exception("Unsupported AI provider.");
       if(AiProviders.Selected!=name)LocalSettings.Current.Model="";
       LocalSettings.Current.Provider=name;
-     }if(settings.TryGetProperty("agentApproval",out var approval)){var mode=approval.GetString();if(mode is null||!AgentPolicy.Approvals.Contains(mode))throw new Exception("Unsupported approval mode.");LocalSettings.Current.AgentApproval=mode;}
+     }if(settings.TryGetProperty("screens",out var screens)){var scope=screens.GetString();if(scope is not ("all" or "cursor"))throw new Exception("Screens must be all or cursor.");LocalSettings.Current.ScreenScope=scope;}
+     if(settings.TryGetProperty("agentApproval",out var approval)){var mode=approval.GetString();if(mode is null||!AgentPolicy.Approvals.Contains(mode))throw new Exception("Unsupported approval mode.");LocalSettings.Current.AgentApproval=mode;}
      if(settings.TryGetProperty("agentTools",out var tools)&&tools.ValueKind==JsonValueKind.Array){LocalSettings.Current.AgentTools=tools.EnumerateArray().Select(t=>t.GetString()??"").Where(t=>AgentPolicy.Groups.Contains(t)).Distinct().ToArray();}
      if(settings.TryGetProperty("workspace",out var workspace)&&workspace.ValueKind==JsonValueKind.String){var folder=workspace.GetString()!;if(folder.Length==0)LocalSettings.Current.AgentWorkspace=null;else{if(!Directory.Exists(folder))throw new Exception("That workspace folder does not exist.");LocalSettings.Current.AgentWorkspace=Path.GetFullPath(folder);}}
      LocalSettings.Save();result=Status();break;
     case "ask":
      var args=msg.GetProperty("args");var model=args.GetProperty("model").GetString()!;var question=args.GetProperty("question").GetString()!;
      if(string.IsNullOrWhiteSpace(model)||string.IsNullOrWhiteSpace(question))throw new Exception("Choose a model and enter a question.");
-     var ai=AiProviders.Current;byte[]? image=null;System.Drawing.Rectangle bounds=default;if(args.GetProperty("screen").GetBoolean()){await ai.ValidateImagesAsync(model);if(!LocalSettings.Current.AllowScreenCapture)throw new Exception("Screen permission is disabled.");image=ScreenCapture.CaptureCursorMonitorJpeg(out bounds);}
+     var ai=AiProviders.Current;byte[]? image=null;System.Drawing.Rectangle bounds=default;if(args.GetProperty("screen").GetBoolean()){await ai.ValidateImagesAsync(model);if(!LocalSettings.Current.AllowScreenCapture)throw new Exception("Screen permission is disabled.");image=LocalSettings.Current.ScreenScope=="cursor"?ScreenCapture.CaptureCursorMonitorJpeg(out bounds):ScreenCapture.CaptureAllMonitorsJpeg(out bounds);
+      // The screenshot shows what is visible; the window list adds windows and browser tabs that are hidden behind others.
+      try{question+="\n\nFor context, these windows and browser tabs are open on the user's PC (the screenshot "+(LocalSettings.Current.ScreenScope=="cursor"?"shows only the monitor under the mouse pointer":"shows all monitors side by side in their real arrangement")+"):\n"+OpenWindows.Summary();}catch{}
+     }
      Emit(new{eventName="captured",value=true});
      var history=new List<(string Role,string Text)>();
      if(args.TryGetProperty("history",out var prior)&&prior.ValueKind==JsonValueKind.Array){foreach(var turn in prior.EnumerateArray().TakeLast(12)){var role=turn.GetProperty("role").GetString();var text=turn.GetProperty("text").GetString()??"";if(role is not ("user" or "assistant"))throw new Exception("Invalid history role.");if(text.Length>12000)text=text[..12000];history.Add((role,text));}}

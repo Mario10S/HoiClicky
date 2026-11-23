@@ -7,7 +7,7 @@ static class AgentTests {
 
  public static async Task RunAsync(){
   Policy();Desktop();AppControl();await Runner();
-  Console.WriteLine("PASS: agent approval rules, workspace boundary, disabled tools, screen permission, desktop coordinate mapping and key parsing, permission protocol allow/deny/stop, step list, agent without workspace, app control prompt.");
+  Console.WriteLine("PASS: agent approval rules, workspace boundary, disabled tools, screen permission, desktop coordinate mapping and key parsing, permission protocol allow/deny/stop, step list, agent without workspace, app control prompt, monitors, window and tab listing, tab matching.");
  }
 
  static void Policy(){
@@ -31,6 +31,10 @@ static class AgentTests {
   Check(AgentPolicy.Decide("PowerShell",command,S("auto",["files","web"])).Decision==AgentDecision.Deny,"A turned-off tool group was allowed.");
   Check(AgentPolicy.Decide("mcp__desktop__screenshot",Json("{}"),S("auto",screen:false)).Decision==AgentDecision.Deny,"Screenshot ran with screen access off.");
   Check(AgentPolicy.Decide("mcp__desktop__screenshot",Json("{}"),S("ask")).Decision==AgentDecision.Allow,"Screenshot needed approval with screen access on.");
+  Check(AgentPolicy.Decide("mcp__desktop__list_windows",Json("{}"),S("ask",screen:false)).Decision==AgentDecision.Deny,"Window list ran with screen access off.");
+  Check(AgentPolicy.Decide("mcp__desktop__focus_window",Json("{\"id\":1}"),S("ask")).Decision==AgentDecision.Allow,"Focusing a window needed approval.");
+  Check(AgentPolicy.Decide("mcp__desktop__close_window",Json("{\"id\":1}"),S("files")).Decision==AgentDecision.Ask,"Closing a window ran without approval.");
+  Check(AgentPolicy.Decide("mcp__desktop__focus_window",Json("{\"id\":1}"),S("auto",["files"])).Decision==AgentDecision.Deny,"Window tools ran with mouse and keyboard tools off.");
   Check(AgentPolicy.Decide("Task",Json("{}"),S("auto")).Decision==AgentDecision.Deny,"An unknown tool was allowed.");
   Check(AgentPolicy.CliTools(["files"])=="Read,Glob,Grep,Edit,Write","Wrong CLI tool list.");
  }
@@ -45,10 +49,18 @@ static class AgentTests {
   var map=new ScreenMapping(-1920,0,2560,1440,1280,720);
   Check(DesktopMcpCore.ToScreen(640,360,map)==(-640,720),"Screenshot point did not map to the screen.");
   try{DesktopMcpCore.ToScreen(1280,10,map);throw new Exception("Accepted a point outside the screenshot.");}catch(InvalidOperationException){}
-  Check(DesktopMcpCore.ImageSize(2560,1440)==(1280,720)&&DesktopMcpCore.ImageSize(1024,768)==(1024,768),"Wrong screenshot size.");
+  Check(DesktopMcpCore.ImageSize(2560,1440)==(1280,720)&&DesktopMcpCore.ImageSize(1024,768)==(1024,768)&&DesktopMcpCore.ImageSize(1080,1920)==(720,1280),"Wrong screenshot size.");
+  var monitors=DesktopMcpCore.Number([(false,2560,-265,1080,1920),(true,0,0,2560,1440)]);
+  Check(monitors[0] is {Number:1,Primary:true}&&monitors[1] is {Number:2,Left:2560},"Monitors were not numbered primary first.");
+  Check(DesktopMcpCore.Describe(monitors[1]).Contains("portrait"),"Portrait monitor not described.");
+  var listing=DesktopMcpCore.Format(monitors,[new WindowInfo(42,"Inbox - Outlook","olk",1,false,[],-1),new WindowInfo(7,"YouTube - Chrome","chrome",2,false,["YouTube","Docs","GitHub"],0)]);
+  Check(listing.Contains("[id 42] Inbox - Outlook (olk, monitor 1)")&&listing.Contains("with 3 tabs")&&listing.Contains("1. YouTube (active)")&&listing.Contains("3. GitHub")&&listing.Contains("monitor 2: 1080x1920 portrait"),"Window listing was wrong.");
+  var tabs=new[]{"YouTube","Google Docs","GitHub - HoiClicky","GitHub - Other"};
+  Check(DesktopMcpCore.MatchTab(tabs,"docs")==1&&DesktopMcpCore.MatchTab(tabs,"3")==2&&DesktopMcpCore.MatchTab(tabs,"youtube")==0,"Tab matching failed.");
+  try{DesktopMcpCore.MatchTab(tabs,"GitHub");throw new Exception("Ambiguous tab accepted.");}catch(InvalidOperationException ex){Check(ex.Message.Contains("2 tabs match"),"Wrong ambiguous-tab error.");}
   Check(DesktopMcpCore.ParseKeys("ctrl+shift+s").SequenceEqual(new ushort[]{0x11,0x10,0x53})&&DesktopMcpCore.ParseKeys("F5")[0]==0x74&&DesktopMcpCore.ParseKeys("enter")[0]==0x0D,"Key parsing failed.");
   try{DesktopMcpCore.ParseKeys("ctrl+banana");throw new Exception("Accepted an unknown key.");}catch(InvalidOperationException){}
-  var tools=JsonSerializer.Serialize(DesktopMcpCore.Tools());foreach(var name in new[]{"screenshot","click","type_text","press_keys","scroll"})Check(tools.Contains($"\"{name}\""),"Missing desktop tool "+name+".");
+  var tools=JsonSerializer.Serialize(DesktopMcpCore.Tools());foreach(var name in new[]{"screenshot","click","type_text","press_keys","scroll","list_windows","focus_window","activate_tab","close_window"})Check(tools.Contains($"\"{name}\""),"Missing desktop tool "+name+".");
  }
 
  static async Task Runner(){

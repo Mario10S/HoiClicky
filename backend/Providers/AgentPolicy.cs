@@ -32,7 +32,9 @@ internal static class AgentPolicy {
   var group=Group(tool);
   if(group is null)return (AgentDecision.Deny,"HoiClicky does not allow this tool.");
   if(!settings.Tools.Contains(group))return (AgentDecision.Deny,GroupLabel(group)+" are turned off in HoiClicky settings.");
-  if(tool==DesktopPrefix+"screenshot")return settings.ScreenAllowed?(AgentDecision.Allow,null):(AgentDecision.Deny,"Screen access is turned off in HoiClicky settings.");
+  if(tool is DesktopPrefix+"screenshot" or DesktopPrefix+"list_windows")return settings.ScreenAllowed?(AgentDecision.Allow,null):(AgentDecision.Deny,"Screen access is turned off in HoiClicky settings.");
+  // Bringing a window or tab to the front changes nothing in it, so it never needs a confirmation.
+  if(tool is DesktopPrefix+"focus_window" or DesktopPrefix+"activate_tab")return (AgentDecision.Allow,null);
   if(settings.Approval=="auto")return (AgentDecision.Allow,null);
   var path=PathOf(input);
   var inside=path is null||Inside(path,settings.Workspace);

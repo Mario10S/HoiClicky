@@ -12,6 +12,8 @@ internal sealed class LocalSettings
     public string HostId { get; set; } = "urn:uuid:" + Guid.NewGuid().ToString();
     public string? IssuedClientId { get; set; }
     public bool AllowScreenCapture { get; set; } = true;
+    // "all" captures every monitor for screen questions, "cursor" only the monitor under the mouse pointer.
+    public string ScreenScope { get; set; } = "all";
     public bool AllowMicrophone { get; set; }
     public string? Provider { get; set; }
     public string? Model { get; set; }

@@ -7,7 +7,7 @@ HoiClicky is an early Windows 11 pre-release. It is an independent Windows port 
 ## What works today
 
 - Compact floating assistant with a chat window and searchable local conversation sidebar.
-- Ask about the current screen on demand. A screenshot is captured only when you send a screen question.
+- Ask about the current screen on demand. A screenshot is captured only when you send a screen question. It covers all monitors by default (Settings → Screens to include can limit it to the monitor under the pointer), and the question also lists the open windows and browser tabs (read through Windows accessibility) so the AI knows what is hidden behind other windows.
 - Choose a local Ollama model, or optionally connect an eligible ChatGPT account through OpenAI's official Sign in with ChatGPT flow. ChatGPT plan access and available models depend on OpenAI's eligibility and limits; a ChatGPT subscription does not provide API-key access.
 - Optionally use Claude through your own installed [Claude Code](https://claude.com/claude-code). Sign-in opens the browser via Claude Code's official `claude auth login`; usage counts toward your own Claude plan and its limits.
 - Hold one configurable key, or two keys together, to record speech, then transcribe locally with Whisper when set up. The transcript is sent automatically after you release the key.
@@ -52,7 +52,7 @@ The optional Claude provider runs the user's own Claude Code CLI (`claude -p`) i
 With Claude selected, the **Agent** chip in the chat lets Claude act on the PC instead of only answering. Claude can also switch it on itself when you explicitly ask it to do a task in agent mode; the chat says so when that happens.
 
 - **Workspace folder:** optional. Without one, Claude runs from an empty folder of its own (`%LOCALAPPDATA%\HoiClicky\agent-home`), focuses on desktop and web tasks such as closing windows or clicking buttons, and file access outside it asks first.
-- **Tools**, each switchable in Settings → Agent mode: files in the workspace folder, PowerShell/terminal commands, mouse and keyboard (screenshot, click, type, keys, scroll through HoiClicky's own desktop MCP server), and web search/fetch.
+- **Tools**, each switchable in Settings → Agent mode: files in the workspace folder, PowerShell/terminal commands, mouse and keyboard (through HoiClicky's own desktop MCP server: screenshot of one monitor or all, click, type, keys, scroll, plus list_windows with browser tabs, focus_window, activate_tab and close_window), and web search/fetch. Focusing a window or switching a tab never asks; closing a window does.
 - **Approvals**:
   - *Ask before every change* (default): every edit, command, click and keystroke shows an Allow/Deny card in the chat and the floating panel.
   - *Workspace files freely*: edits inside the workspace run without asking; everything else still asks.

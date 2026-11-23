@@ -37,7 +37,11 @@ internal static class DesktopMcp {
   var name=p.GetProperty("name").GetString();var args=p.TryGetProperty("arguments",out var a)?a:default;
   try{
    switch(name){
-    case "screenshot":{var (jpeg,map)=Capture();return new{content=new object[]{new{type="image",data=Convert.ToBase64String(jpeg),mimeType="image/jpeg"},new{type="text",text=$"Screenshot {map.ImageWidth}x{map.ImageHeight} pixels. Use these pixel coordinates for click and scroll."}}};}
+    case "screenshot":{var which=args.ValueKind==JsonValueKind.Object&&args.TryGetProperty("monitor",out var mon)?(mon.ValueKind==JsonValueKind.Number?mon.GetInt32().ToString():mon.GetString()):null;var (jpeg,map,label)=Capture(which);return new{content=new object[]{new{type="image",data=Convert.ToBase64String(jpeg),mimeType="image/jpeg"},new{type="text",text=$"Screenshot of {label}, {map.ImageWidth}x{map.ImageHeight} pixels. Use these pixel coordinates for click and scroll. Monitors: {string.Join("; ",OpenWindows.Monitors().Select(DesktopMcpCore.Describe))}."}}};}
+    case "list_windows":return Text(OpenWindows.Summary());
+    case "focus_window":return Text(OpenWindows.Focus(Id(args)));
+    case "activate_tab":{var tab=args.GetProperty("tab");return Text(OpenWindows.ActivateTab(Id(args),tab.ValueKind==JsonValueKind.Number?tab.GetInt32().ToString():tab.GetString()??""));}
+    case "close_window":return Text(OpenWindows.Close(Id(args)));
     case "click":{var (x,y)=Target(args);var right=args.TryGetProperty("button",out var b)&&b.GetString()=="right";var twice=args.TryGetProperty("double",out var d)&&d.ValueKind==JsonValueKind.True;Click(x,y,right,twice);return Text($"{(twice?"Double-clicked":right?"Right-clicked":"Clicked")} at screen {x},{y}. Take a screenshot to check the result.");}
     case "scroll":{var (x,y)=Target(args);var amount=(int)Math.Clamp(args.GetProperty("amount").GetDouble(),-20,20);SetCursorPos(x,y);Send(Mouse(0x0800,amount*120));return Text($"Scrolled {amount} at screen {x},{y}.");}
     case "type_text":{var text=args.GetProperty("text").GetString()??"";if(text.Length>5000)throw new InvalidOperationException("Type at most 5000 characters at once.");TypeText(text);return Text($"Typed {text.Length} characters.");}
@@ -47,15 +51,24 @@ internal static class DesktopMcp {
   }catch(Exception ex) when(ex is InvalidOperationException or KeyNotFoundException or FormatException){return new{content=new object[]{new{type="text",text=ex.Message}},isError=true};}
  }
  static object Text(string text)=>new{content=new object[]{new{type="text",text}}};
+ static long Id(JsonElement args)=>(long)args.GetProperty("id").GetDouble();
 
  static (int X,int Y) Target(JsonElement args){
   var map=DesktopMcpCore.LoadMapping()??throw new InvalidOperationException("Take a screenshot first so HoiClicky knows where to click.");
   return DesktopMcpCore.ToScreen(args.GetProperty("x").GetDouble(),args.GetProperty("y").GetDouble(),map);
  }
 
- static (byte[] Jpeg,ScreenMapping Map) Capture(){
-  GetCursorPos(out var cursor);var bounds=Screen.FromPoint(new Point(cursor.X,cursor.Y)).Bounds;
-  var (w,h)=DesktopMcpCore.ImageSize(bounds.Width,bounds.Height);
+ // which: null = monitor under the pointer, "all" = every monitor, "2" = monitor number from list_windows.
+ static (byte[] Jpeg,ScreenMapping Map,string Label) Capture(string? which){
+  Rectangle bounds;string label;var max=DesktopMcpCore.MaxImageWidth;
+  if(string.Equals(which,"all",StringComparison.OrdinalIgnoreCase)){bounds=SystemInformation.VirtualScreen;label="all monitors";max=DesktopMcpCore.MaxAllMonitorsWidth;}
+  else if(!string.IsNullOrWhiteSpace(which)){
+   var monitors=OpenWindows.Monitors();
+   if(!int.TryParse(which,out var number)||number<1||number>monitors.Count)throw new InvalidOperationException($"Choose a monitor from 1 to {monitors.Count}, or all.");
+   var m=monitors[number-1];bounds=new Rectangle(m.Left,m.Top,m.Width,m.Height);label=DesktopMcpCore.Describe(m);
+  }
+  else{GetCursorPos(out var cursor);bounds=Screen.FromPoint(new Point(cursor.X,cursor.Y)).Bounds;var monitors=OpenWindows.Monitors();label=monitors.FirstOrDefault(m=>m.Left==bounds.Left&&m.Top==bounds.Top) is {} m?DesktopMcpCore.Describe(m):"the monitor under the pointer";}
+  var (w,h)=DesktopMcpCore.ImageSize(bounds.Width,bounds.Height,max);
   using var full=new Bitmap(bounds.Width,bounds.Height,PixelFormat.Format24bppRgb);
   using(var g=Graphics.FromImage(full))g.CopyFromScreen(bounds.Left,bounds.Top,0,0,bounds.Size,CopyPixelOperation.SourceCopy);
   using var scaled=new Bitmap(w,h,PixelFormat.Format24bppRgb);
@@ -64,7 +77,7 @@ internal static class DesktopMcp {
   using var parameters=new EncoderParameters(1);parameters.Param[0]=new EncoderParameter(System.Drawing.Imaging.Encoder.Quality,80L);
   scaled.Save(output,encoder,parameters);
   var map=new ScreenMapping(bounds.Left,bounds.Top,bounds.Width,bounds.Height,w,h);DesktopMcpCore.SaveMapping(map);
-  return (output.ToArray(),map);
+  return (output.ToArray(),map,label);
  }
 
  static void Click(int x,int y,bool right,bool twice){
