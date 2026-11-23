@@ -80,7 +80,7 @@ internal static class ClaudeCodeAuth {
 }
 
 internal sealed class ClaudeCodeProvider:IAiProvider {
- const string SystemPrompt="You are HoiClicky, a friendly AI screen companion on Windows. Answer clearly and concisely in the language the user writes in, using Markdown when it helps. When a screenshot is attached it shows the user's current screen. You cannot click, type or run anything on the computer; explain the steps instead.";
+ const string SystemPrompt="You are HoiClicky, a friendly AI screen companion on Windows. Answer clearly and concisely in the language the user writes in, using Markdown when it helps. When a screenshot is attached it shows the user's current screen. You cannot click, type or run anything on the computer in this mode; explain the steps instead. If the user explicitly asks you to do the task yourself, to act as an agent, or to use agent mode, reply with exactly [[AGENT_MODE]] and nothing else, so HoiClicky can switch on agent mode.";
  static readonly AiModel[] Models=[new("sonnet","Claude Sonnet (latest)",true),new("opus","Claude Opus (latest)",true),new("haiku","Claude Haiku (latest)",true)];
  readonly IClaudeCli Cli;
  public ClaudeCodeProvider(IClaudeCli? cli=null){Cli=cli??ClaudeCli.Default;}

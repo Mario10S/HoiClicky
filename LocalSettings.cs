@@ -18,6 +18,9 @@ internal sealed class LocalSettings
     public int TalkKey1 { get; set; } = 162;
     public int TalkKey2 { get; set; } = 164;
     public bool ReadAloud { get; set; }
+    public string AgentApproval { get; set; } = "ask";
+    public string[] AgentTools { get; set; } = ["files", "commands", "desktop", "web"];
+    public string? AgentWorkspace { get; set; }
 
     private static LocalSettings Load()
     {

@@ -16,6 +16,7 @@ class Tests {
   handler.Reply=_=>throw new HttpRequestException("offline");try{await provider.ModelsAsync();throw new Exception("Offline provider succeeded.");}catch(InvalidOperationException ex){Check(ex.Message.Contains("Cannot reach Ollama"),"Incorrect offline error.");}
   await ClaudeTests();
   TalkKeyTests();
+  await AgentTests.RunAsync();
   Console.WriteLine("PASS: model capabilities, text-only image rejection, vision acceptance, streamed text, credential isolation, interrupted stream, offline recovery message.");
  }
  static void TalkKeyTests(){
