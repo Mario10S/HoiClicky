@@ -1,3 +1,5 @@
+> **Implemented (2026-11-23):** ChatGPT agent mode now uses the existing OAuth token, shared approval policy/cards and desktop MCP server. See HANDOFF.md for tests and remaining live checks. This document records the design and known limits.
+
 # Building agent mode for ChatGPT users
 
 This file is a hand-off for an AI coding assistant (or a human contributor). It explains how HoiClicky's agent mode works today with Claude, and how to give ChatGPT users the same experience. Read `CLAUDE.md`, `HANDOFF.md` and `README.md` first; their rules apply here too.

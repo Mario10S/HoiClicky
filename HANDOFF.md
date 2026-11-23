@@ -25,10 +25,10 @@ Preserve the upstream MIT license and attribution in [LICENSE](LICENSE). Do not 
 - Optional official Sign in with ChatGPT flow and local Ollama provider with model selection.
 - Optional Claude provider (`backend/Providers/ClaudeCodeProvider.cs`) that runs the user's own Claude Code CLI headless with tools disabled; sign-in uses Claude Code's browser login (`claude auth login`). Prompt and screenshot travel over stdin only, with `--no-session-persistence`. See the README's Claude connection section.
 - Configurable push-to-talk with one key or two keys held together (Key 2 = None; Space cannot be used alone; rules in `backend/TalkKeys.cs`); local Whisper transcription when installed; transcript is sent on release.
-- Agent mode for Claude:
+- Agent mode for Claude and ChatGPT:
   - Agent chip, plus self-activation when the user asks for it (`[[AGENT_MODE]]` marker).
   - Tools: workspace files, commands, mouse/keyboard via `backend/DesktopMcp.cs` (started as `HoiClicky.Service --mcp-desktop`), and web.
-  - Approval modes ask, files and auto, decided by `backend/Providers/AgentPolicy.cs`. `ClaudeAgentRunner.cs` answers Claude Code's `can_use_tool` control requests and shows Allow/Deny cards in the chat and floating panel.
+  - Approval modes ask, files and auto, decided by `backend/Providers/AgentPolicy.cs`. `ClaudeAgentRunner.cs` handles Claude Code tool requests; `ChatGptAgentRunner.cs` handles stateless Responses API function calls and replays tool-call/output items. Both use the same Allow/Deny cards in the chat and floating panel.
   - Click preview through the companion cursor, a Stop button, and a 5-minute approval timeout.
   - The workspace folder is optional. Without one, the agent runs from `%LOCALAPPDATA%\HoiClicky\agent-home` with a desktop/web-focused prompt.
 - App control ("Jarvis"):
@@ -148,3 +148,6 @@ After each meaningful change, update this file with the current behavior, open p
 
 - Voice output update (2026-11-23): answer speech is enabled by default with a setting to turn it off. Added local Piper voices (German Thorsten high and English Lessac medium), per-user model download, voice preview, stop control, and optional ElevenLabs. Piper is installed locally with Python and its German model is stored under the user's Electron data folder; no chat answer text leaves the PC when Piper is selected. ElevenLabs only receives the answer text and requires the user's own API key, encrypted with Electron safeStorage. `npm run build --prefix desktop` passed; desktop Node tests passed 10/10; Piper generated a test WAV successfully. Live listening and in-app playback still need confirmation. Piper upstream engine is GPL-3.0; voice model licenses vary, so inspect each model card before redistributing voices.
 - Piper first-run fix (2026-11-23): on a PC without the `piper-tts` package, "Download free voice" failed. `desktop/electron/piper.cjs` now checks `import piper`, installs `piper-tts` with `py -m pip install --user` when missing, then downloads the voice, and explains a missing Python or a failed pip install. Tests: `tests/Desktop/piper.test.mjs`. On a clean machine it installed Piper (about 10 s), downloaded `en_US-lessac-medium` and rendered a test WAV through the same module.
+
+
+- ChatGPT agent mode (2026-11-23): added a Responses API tool loop with `store:false`, function-call replay, OAuth token usage, workspace file read/list/search/write/edit tools, bounded PowerShell, HTTPS fetch and existing desktop MCP tools. All tools pass AgentPolicy and existing approvals; Stop cancels the Responses stream, command process and MCP process. Screenshots/tool results remain in memory. Provider tests cover fake response replay and denied writes; desktop tests pass 16/16; backend Release and Vite production builds pass. Live ChatGPT-account and desktop-action verification remains outstanding.

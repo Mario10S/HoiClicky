@@ -4,6 +4,7 @@ using HoiClicky.Providers;
 class Tests {
  static void Check(bool value,string message){if(!value)throw new Exception(message);}
  static async Task Main(){
+  await TestChatGptAgent();
   Check(Annotations.Parse("Answer [[POINT:10,100]]")?.Coordinates.SequenceEqual(new[]{10,100})==true,"Circle parsing failed.");
   Check(Annotations.Parse("Answer [[ARROW:10,20,30,40]]")?.Coordinates.SequenceEqual(new[]{10,20,30,40})==true,"Arrow parsing failed.");
   Check(Annotations.Parse("[[ARROW:10,20,30,101]]")==null && Annotations.Parse("[[POINT:1,2,3,4]]")==null,"Invalid marker accepted.");
@@ -23,6 +24,18 @@ class Tests {
   await AgentTests.RunAsync();
   Console.WriteLine("PASS: model capabilities, text-only image rejection, vision acceptance, streamed text, credential isolation, interrupted stream, offline recovery message.");
  }
+ static async Task TestChatGptAgent(){
+  var workspace=Path.Combine(Path.GetTempPath(),"hoi-agent-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(workspace);await File.WriteAllTextAsync(Path.Combine(workspace,"note.txt"),"hello from workspace");
+  try{
+   var calls=0;var handler=new Handler();handler.Reply=async request=>{var body=await request.Content!.ReadAsStringAsync();Check(request.RequestUri!.AbsolutePath=="/v1/responses","Incorrect Responses endpoint.");Check(request.Headers.Authorization?.Scheme=="Bearer","OAuth token missing.");if(calls++==0)return Sse("response.output_item.done",new{type="function_call",name="read_file",arguments="{\"path\":\"note.txt\"}",call_id="read1"});Check(body.Contains("function_call_output")&&body.Contains("hello from workspace"),"Function output was not sent on the next turn.");return TextSse("Read complete.");};
+   using(var http=new HttpClient(handler)){var runner=new ChatGptAgentRunner((_,_)=>Task.FromResult(false),http:http,tokenSource:()=>Task.FromResult("fake-token"));var answer=await runner.RunAsync("Read note.txt",null,"gpt-test",[],new AgentSettings("ask",["files"],workspace,false),_=>{},CancellationToken.None);Check(answer.Contains("Read note.txt")&&answer.Contains("Read complete."),"Tool-loop result or step was missing: "+answer);}
+   var deniedCalls=0;var deniedHandler=new Handler();deniedHandler.Reply=async request=>{var body=await request.Content!.ReadAsStringAsync();if(deniedCalls++==0)return Sse("response.output_item.done",new{type="function_call",name="write_file",arguments="{\"path\":\"new.txt\",\"content\":\"bad\"}",call_id="write1"});Check(body.Contains("DENIED:")&&body.Contains("Do not retry"),"Denied tool result not sent to model.");return TextSse("Understood.");};
+   using(var http=new HttpClient(deniedHandler)){var runner=new ChatGptAgentRunner((_,_)=>Task.FromResult(false),http:http,tokenSource:()=>Task.FromResult("fake-token"));var answer=await runner.RunAsync("Write a file",null,"gpt-test",[],new AgentSettings("ask",["files"],workspace,false),_=>{},CancellationToken.None);Check(answer.Contains("denied")&&!File.Exists(Path.Combine(workspace,"new.txt")),"Denied write was performed.");}
+   Console.WriteLine("PASS: ChatGPT Responses tool loop, OAuth header, stateless function output replay and denied writes.");
+  }finally{Directory.Delete(workspace,true);}
+ }
+ static HttpResponseMessage Sse(string type,object item)=>new(HttpStatusCode.OK){Content=new StringContent("data: "+System.Text.Json.JsonSerializer.Serialize(new{type,item})+"\n\n"+"data: {\"type\":\"response.completed\"}\n\n"+"data: [DONE]\n\n",Encoding.UTF8,"text/event-stream")};
+ static HttpResponseMessage TextSse(string text)=>new(HttpStatusCode.OK){Content=new StringContent("data: {\"type\":\"response.output_text.delta\",\"delta\":"+System.Text.Json.JsonSerializer.Serialize(text)+"}\n\n"+"data: {\"type\":\"response.completed\"}\n\n"+"data: [DONE]\n\n",Encoding.UTF8,"text/event-stream")};
  static void TalkKeyTests(){
   HoiClicky.TalkKeys.Validate(119,HoiClicky.TalkKeys.None);HoiClicky.TalkKeys.Validate(162,164);
   foreach(var (k1,k2,why) in new[]{(32,0,"Space alone"),(162,162,"same key twice"),(65,0,"unsupported key"),(162,65,"unsupported second key")}){try{HoiClicky.TalkKeys.Validate(k1,k2);throw new Exception("Accepted "+why+".");}catch(Exception ex)when(!ex.Message.StartsWith("Accepted")){}}

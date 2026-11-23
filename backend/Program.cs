@@ -84,11 +84,13 @@ class Program {
      Emit(new{eventName="captured",value=true});
      var history=new List<(string Role,string Text)>();
      if(args.TryGetProperty("history",out var prior)&&prior.ValueKind==JsonValueKind.Array){foreach(var turn in prior.EnumerateArray().TakeLast(12)){var role=turn.GetProperty("role").GetString();var text=turn.GetProperty("text").GetString()??"";if(role is not ("user" or "assistant"))throw new Exception("Invalid history role.");if(text.Length>12000)text=text[..12000];history.Add((role,text));}}
-     if(AiProviders.Selected=="claude"&&args.TryGetProperty("app",out var appState)&&appState.ValueKind==JsonValueKind.Object)question+="\n\n"+AppCommands.Prompt(appState);
+     if((AiProviders.Selected is "claude" or "chatgpt")&&args.TryGetProperty("app",out var appState)&&appState.ValueKind==JsonValueKind.Object)question+="\n\n"+AppCommands.Prompt(appState);
      if(args.TryGetProperty("agent",out var agentFlag)&&agentFlag.ValueKind==JsonValueKind.True){
-      if(AiProviders.Selected!="claude")throw new Exception("Agent mode needs Claude as the AI provider.");
+      if(AiProviders.Selected is not ("claude" or "chatgpt"))throw new Exception("Agent mode needs Claude or ChatGPT as the AI provider.");
       using var run=new CancellationTokenSource();agentRun=run;
-      try{result=await new ClaudeAgentRunner(AskUser,preview:PreviewAction).RunAsync(question,image,model,history,AgentSettingsNow(),DesktopMcpConfig(),text=>Emit(new{eventName="answer",value=text}),run.Token);}
+      try{result=AiProviders.Selected=="claude"
+       ?await new ClaudeAgentRunner(AskUser,preview:PreviewAction).RunAsync(question,image,model,history,AgentSettingsNow(),DesktopMcpConfig(),text=>Emit(new{eventName="answer",value=text}),run.Token)
+       :await new ChatGptAgentRunner(AskUser,preview:PreviewAction,tokenSource:OAuthService.GetAccessTokenAsync).RunAsync(question,image,model,history,AgentSettingsNow(),text=>Emit(new{eventName="answer",value=text}),run.Token);}
       finally{agentRun=null;foreach(var open in approvals.Values)open.TrySetResult(false);}
       break;
      }

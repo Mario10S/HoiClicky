@@ -65,12 +65,19 @@ With Claude selected, the **Agent** chip in the chat lets Claude act on the PC i
 - **How it runs:** Claude Code runs with `--permission-prompt-tool stdio`, so every tool request reaches HoiClicky first (`backend/Providers/AgentPolicy.cs` decides, `ClaudeAgentRunner.cs` asks the user). Sessions are not persisted.
 - **Limits:** click coordinates come from a scaled screenshot and can miss, and the screen can change between screenshot and click. Elevated (administrator) windows ignore simulated input.
 
+
+## Agent mode (ChatGPT)
+
+ChatGPT users can turn on the **Agent** chip to let the signed-in model use HoiClicky's agent tools. It uses the existing Sign in with ChatGPT connection and Responses API; it does not require an API key. Eligible account and model access depends on OpenAI. Available tools include workspace file reading, listing, searching, editing and writing; PowerShell commands; HTTPS page fetch; and HoiClicky's desktop controls through its local MCP server.
+
+The existing Settings ? Agent mode controls apply to ChatGPT too: tool groups, workspace, and Ask / Workspace files freely / Autonomous approval modes. In Ask mode, edits, commands and desktop actions show Allow/Deny cards; screen capture and window listing require screen permission. Stop cancels the request and pending approvals. Screenshots are sent only when the user explicitly sends a screen question or the agent is enabled and the model requests its screen tool; images and tool outputs are not saved in chat history. OpenAI receives the prompt, recent text context, and any requested screenshot. ChatGPT subscriptions do not guarantee eligibility or unlimited use.
+
 ## Privacy and local files
 
 - OAuth credentials are protected with Windows DPAPI under `%LOCALAPPDATA%\HoiClicky\credentials.dpapi`.
 - Non-secret preferences are stored in `%LOCALAPPDATA%\HoiClicky\settings.json`.
 - Conversations are stored as plain-text JSON in Electron's user data folder under `conversations` (normally `%APPDATA%\hoiclicky-desktop\conversations`). They are separate from ChatGPT website history.
-- Screenshots and microphone audio are not saved to conversation files. Screen images are sent only when the user sends a screen question; the selected AI provider processes the request.
+- Screenshots and microphone audio are not saved to conversation files. Screen images are sent only after the user sends a screen question or explicitly enables Agent mode and the selected agent calls the screen tool; screen permission still applies.
 - Ollama requests go to the local Ollama service. When ChatGPT is selected, request text and any explicitly captured screenshot are sent to OpenAI. When Claude is selected, they are sent to Anthropic through Claude Code.
 
 ## Development checks
