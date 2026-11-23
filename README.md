@@ -57,3 +57,7 @@ These checks exercise formatting, local history, audio settings and provider beh
 ## Upstream attribution
 
 HoiClicky is a Windows desktop port inspired by [mekanikal-ch/yoclicky](https://github.com/mekanikal-ch/yoclicky). The original MIT copyright notices for Farza's Clicky and Théotime's YoClicky are retained in [LICENSE](LICENSE).
+
+## Contributing and handoff
+
+Joining the project? Read [HANDOFF.md](HANDOFF.md) for the current architecture, known gaps, and recommended next task. [CLAUDE.md](CLAUDE.md) contains instructions and a ready-to-use Claude Code prompt. The `desktop/README.md` points back to this project overview.
