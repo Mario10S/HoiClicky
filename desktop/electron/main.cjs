@@ -1,5 +1,5 @@
 const {registerHistory}=require('./history.cjs');
-const {app,BrowserWindow,ipcMain,globalShortcut,screen,dialog,shell,safeStorage}=require('electron');
+const {app,BrowserWindow,ipcMain,globalShortcut,screen,dialog,shell,safeStorage,nativeTheme}=require('electron');
 const {spawn}=require('node:child_process');const fs=require('node:fs');const path=require('node:path');const readline=require('node:readline');
 const {registerSounds}=require('./completion-sound.cjs');
 const piper=require('./piper.cjs');
@@ -88,7 +88,7 @@ app.whenReady().then(()=>{
  // Follow-up questions typed into the floating panel are sent through the chat window, so history and providers stay in one place.
  ipcMain.handle('island-ask',(event,text)=>{if(event.sender!==island.webContents)throw Error('Invalid sender');if(typeof text!=='string'||!text.trim()||text.length>32000)throw Error('Invalid question');main.webContents.send('event',{eventName:'islandAsk',text:text.trim()});});
  ipcMain.handle('window',(_,action)=>{if(action==='close'){app.quit();return;}if(!main||main.isDestroyed())return;if(action==='minimize')main.hide();else{main.show();main.focus();}});
- main=create({width:1100,height:790,minWidth:850,minHeight:620,frame:false,backgroundColor:'#111216',show:false},{});
+ main=create({width:1100,height:790,minWidth:850,minHeight:620,frame:false,backgroundColor:nativeTheme.shouldUseDarkColors?'#0a0c13':'#f3f4fa',show:false},{});
  main.on('closed',()=>app.quit());
  const islandStore=path.join(app.getPath('userData'),'island.json');
  island=create({...initialIslandBounds(islandStore),frame:false,transparent:true,backgroundColor:'#00000000',hasShadow:false,alwaysOnTop:true,resizable:false,minimizable:false,maximizable:false,skipTaskbar:true,show:false},{island:'1'});
