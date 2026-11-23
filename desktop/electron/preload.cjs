@@ -1,6 +1,7 @@
 const {contextBridge,ipcRenderer}=require('electron');
 contextBridge.exposeInMainWorld('hoi',{
  history:(action,value)=>ipcRenderer.invoke('history',action,value),
+ ttsKey:(value)=>value===undefined?ipcRenderer.invoke('tts-key-get'):ipcRenderer.invoke('tts-key-set',value),ttsVoices:()=>ipcRenderer.invoke('tts-voices'),ttsSpeak:(value)=>ipcRenderer.invoke('tts-speak',value),
  sound:(action,value)=>ipcRenderer.invoke('completion-sound',action,value),openLink:url=>ipcRenderer.invoke('open-link',url),
  presentation:value=>ipcRenderer.invoke('presentation',value),islandLayout:value=>ipcRenderer.invoke('island-layout',value),
  islandDrag:value=>ipcRenderer.invoke('island-drag',value),islandAsk:text=>ipcRenderer.invoke('island-ask',text),approve:value=>ipcRenderer.invoke('approve',value),agentStop:()=>ipcRenderer.invoke('agentStop'),pickWorkspace:()=>ipcRenderer.invoke('pick-workspace'),confirmAction:value=>ipcRenderer.invoke('confirm-action',value),

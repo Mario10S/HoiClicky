@@ -4,6 +4,10 @@ using HoiClicky.Providers;
 class Tests {
  static void Check(bool value,string message){if(!value)throw new Exception(message);}
  static async Task Main(){
+  Check(Annotations.Parse("Answer [[POINT:10,100]]")?.Coordinates.SequenceEqual(new[]{10,100})==true,"Circle parsing failed.");
+  Check(Annotations.Parse("Answer [[ARROW:10,20,30,40]]")?.Coordinates.SequenceEqual(new[]{10,20,30,40})==true,"Arrow parsing failed.");
+  Check(Annotations.Parse("[[ARROW:10,20,30,101]]")==null && Annotations.Parse("[[POINT:1,2,3,4]]")==null,"Invalid marker accepted.");
+  Check(Annotations.Clean("Answer [[ARR") == "Answer" && Annotations.Clean("Answer [[ARROW:1,2,3,4]]") == "Answer","Marker leaked into answer.");
   var handler=new Handler();using var http=new HttpClient(handler){BaseAddress=new Uri("http://127.0.0.1:11434/")};var provider=new OllamaProvider(http);
   handler.Reply=request=>Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK){Content=new StringContent(request.RequestUri!.AbsolutePath=="/api/tags"?"{\"models\":[{\"name\":\"text\"},{\"name\":\"vision\"}]}":request.Content!.ReadAsStringAsync().Result.Contains("vision")?"{\"capabilities\":[\"completion\",\"vision\"]}":"{\"capabilities\":[\"completion\"]}")});
   var models=await provider.ModelsAsync();Check(models.Count==2&&models[0].SupportsImages==false&&models[1].SupportsImages==true,"Capabilities were not mapped.");

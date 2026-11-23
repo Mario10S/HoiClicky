@@ -58,6 +58,8 @@ class Program {
      var pointArgs=msg.GetProperty("args");result=ConfirmedClick.Prepare(pointArgs.GetProperty("x").GetInt32(),pointArgs.GetProperty("y").GetInt32());break;
     case "confirmClick":result=ConfirmedClick.Invoke();break;
     case "cancelClick":ConfirmedClick.Cancel();result=true;break;
+    case "closeNamedWindow":
+     result=NamedWindow.Close(msg.GetProperty("args").GetProperty("name").GetString()??"");break;
     case "models":result=await AiProviders.Current.ModelsAsync();break;
     case "settings":
      var settings=msg.GetProperty("args");LocalSettings.Current.AllowScreenCapture=settings.GetProperty("screen").GetBoolean();LocalSettings.Current.AllowMicrophone=settings.GetProperty("microphone").GetBoolean();LocalSettings.Current.Model=settings.GetProperty("model").GetString();if(settings.TryGetProperty("key1",out var k1)&&settings.TryGetProperty("key2",out var k2)){
@@ -86,11 +88,10 @@ class Program {
       finally{agentRun=null;foreach(var open in approvals.Values)open.TrySetResult(false);}
       break;
      }
-     if(image is not null)question+="\n\nWhen the user asks where or how to click a visible element, append exactly [[POINT:x,y]] to your answer, using integer percentages from the screenshot top-left (0 to 100). Point at the element center. Omit the marker if uncertain or no specific element applies.";
-     static string Clean(string text){var i=text.LastIndexOf("[[",StringComparison.Ordinal);if(i<0)return text;var suffix=text[i..];return ("[[POINT:".StartsWith(suffix,StringComparison.OrdinalIgnoreCase)||suffix.StartsWith("[[POINT:",StringComparison.OrdinalIgnoreCase))?text[..i].TrimEnd():text;}
-     var answer=await ai.AskAsync(question,image,model,text=>Emit(new{eventName="answer",value=Clean(text)}),history);
-     if(image is not null){var point=System.Text.RegularExpressions.Regex.Match(answer,@"\[\[POINT:\s*(\d{1,3})\s*,\s*(\d{1,3})\s*\]\]",System.Text.RegularExpressions.RegexOptions.IgnoreCase);if(point.Success&&int.TryParse(point.Groups[1].Value,out var x)&&int.TryParse(point.Groups[2].Value,out var y)&&x<=100&&y<=100)Emit(new{eventName="point",x=bounds.Left+(int)(bounds.Width*x/100.0),y=bounds.Top+(int)(bounds.Height*y/100.0)});}
-     result=Clean(answer);break;
+     if(image is not null)question+="\n\nIf a visual annotation would help explain this screen, append ONE marker at the very end of your answer. Use [[POINT:x,y]] to circle one visible element or [[ARROW:x1,y1,x2,y2]] to show a meaningful direction between two visible locations. Coordinates are integer percentages (0 to 100) of the screenshot from its top-left. For an explicitly requested action such as clicking a control or closing a window, use POINT at the center of the specific visible control needed for that action. Do not claim the action was performed; the app will report whether it succeeded. Do not add a marker if uncertain or if no visual aid is useful.";
+     var answer=await ai.AskAsync(question,image,model,text=>Emit(new{eventName="answer",value=image is null?text:Annotations.Clean(text)}),history);
+     if(image is not null && Annotations.Parse(answer) is { } mark){var c=mark.Coordinates;int X(int n)=>bounds.Left+(int)(Math.Max(0,bounds.Width-1)*n/100.0);int Y(int n)=>bounds.Top+(int)(Math.Max(0,bounds.Height-1)*n/100.0);if(mark.Kind=="POINT")Emit(new{eventName="point",x=X(c[0]),y=Y(c[1])});else Emit(new{eventName="arrow",x1=X(c[0]),y1=Y(c[1]),x2=X(c[2]),y2=Y(c[3])});}
+     result=image is null?answer:Annotations.Clean(answer);break;
     case "voice":
      if(!LocalSettings.Current.AllowMicrophone)throw new Exception("Enable microphone access in Settings first.");
      await voice.ListenAsync((kind,value)=>Emit(new{eventName="voice",kind,value}));result=true;break;

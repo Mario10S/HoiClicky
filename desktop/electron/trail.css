@@ -1,1 +1,17 @@
-html,body,svg{margin:0;width:100%;height:100%;overflow:hidden;background:transparent}line{stroke:#d7c5ff;stroke-width:2;stroke-linecap:round;stroke-dasharray:5 9;opacity:.55;animation:fade 4.1s ease both}circle{fill:none;stroke:#e4d9ff;stroke-width:2;opacity:0;animation:target 4.1s ease both}@keyframes fade{0%{opacity:0}20%,75%{opacity:.55}100%{opacity:0}}@keyframes target{0%,20%{opacity:0}35%,75%{opacity:.8}100%{opacity:0}}@media(prefers-reduced-motion:reduce){line,circle{animation:none;opacity:.65}}
+html,body,svg{margin:0;width:100%;height:100%;overflow:hidden;background:transparent}
+line,circle,path{fill:none;stroke:#e4d9ff;stroke-linecap:round;stroke-linejoin:round;opacity:0}
+line{stroke-width:2;stroke-dasharray:5 9}
+circle{stroke-width:3;stroke-dasharray:1;stroke-dashoffset:1;transform-box:fill-box;transform-origin:center;transform:rotate(-90deg)}
+path{display:none;stroke-width:3}
+.circle line{display:none}
+.arrow line{stroke-width:3;stroke-dasharray:1;stroke-dashoffset:1}
+.arrow path{display:block}
+.arrow circle{display:none}
+.visible line{animation:fade 4s ease both}
+.visible circle{animation:draw 4s ease both}
+.visible.arrow line{animation:draw 4s ease both}
+.visible.arrow path{animation:head 4s ease both}
+@keyframes fade{0%{opacity:0}15%,75%{opacity:.65}100%{opacity:0}}
+@keyframes draw{0%{opacity:0;stroke-dashoffset:1}10%{opacity:.95}28%,75%{opacity:.95;stroke-dashoffset:0}100%{opacity:0;stroke-dashoffset:0}}
+@keyframes head{0%,22%{opacity:0}30%,75%{opacity:.95}100%{opacity:0}}
+@media(prefers-reduced-motion:reduce){.visible line,.visible circle,.visible path{animation:fade 4s ease both;stroke-dashoffset:0}}
