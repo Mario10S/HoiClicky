@@ -1,0 +1,32 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+<style>
+ /* Screen edge glow: mint while listening, lavender while thinking, a stronger pulse while the agent works. */
+ html,body{margin:0;height:100%;background:transparent;overflow:hidden}
+ .edge{--glow:rgba(195,170,245,.6);--line:rgba(214,196,250,.85);--level:0;position:fixed;inset:0;pointer-events:none;opacity:0;transition:opacity .45s ease}
+ .edge.on{opacity:1}
+ .edge.listening{--glow:rgba(143,227,200,.62);--line:rgba(176,240,220,.9)}
+ .edge::before{content:"";position:absolute;inset:0;box-shadow:inset 0 0 calc(34px + var(--level) * 46px) calc(6px + var(--level) * 10px) var(--glow);transition:box-shadow .12s linear}
+ .edge::after{content:"";position:absolute;inset:0;border:2px solid var(--line);opacity:.55;filter:blur(.5px)}
+ .edge.working::before{animation:breathe 2.4s ease-in-out infinite}
+ .edge.agent::before{animation:breathe 1.5s ease-in-out infinite}
+ .edge.agent{--glow:rgba(176,140,245,.75);--line:rgba(205,182,250,.95)}
+ @keyframes breathe{0%,100%{opacity:.7}50%{opacity:1}}
+ @media (prefers-reduced-motion:reduce){.edge::before{animation:none!important;transition:none}}
+</style>
+</head>
+<body>
+<div class="edge" id="edge"></div>
+<script>
+ const edge=document.getElementById('edge');
+ // Called from the main process: state is off, listening, working or agent; level is the mic level 0..1.
+ window.setGlow=(state,level)=>{
+  edge.className='edge'+(state==='off'?'':' on '+state);
+  edge.style.setProperty('--level',state==='listening'?String(Math.max(0,Math.min(1,level||0))):'0');
+ };
+</script>
+</body>
+</html>
