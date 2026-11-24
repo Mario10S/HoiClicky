@@ -2,6 +2,7 @@ import {parseMarkdown,inlineTokens} from './markdown.mjs';
 import {playCompletion} from './completion-audio.mjs';
 import {parseAppCommands,stripAppMarkers,planAppAction,appContext} from './app-commands.mjs';
 import {speechText,detectLanguage} from './speech-text.mjs';
+import {acceleratorFromEvent,modifiersPreview,prettyAccelerator,acceleratorParts} from './hotkeys.mjs';
 import React,{useEffect,useRef,useState} from 'react';
 import {createRoot} from 'react-dom/client';
 import {Trash2,ArrowLeft,ArrowUp,AudioLines,Check,ChevronDown,Command,Eye,MessageSquare,Mic,Minus,Monitor,Plus,Settings,Shield,Square,Volume2,X,Sparkles,Pin,PinOff,Minimize2,Copy,ExternalLink,Bot,MousePointer2,Terminal,Globe,FileText,FolderOpen,RefreshCw,Search,ChevronRight} from 'lucide-react';
@@ -22,7 +23,6 @@ const agentProviders=['claude','chatgpt'];
 const voiceVolume=config=>Math.min(1,Math.max(0,Number.isFinite(Number(config?.volume))?Number(config.volume):1));
 const agentGroups=[['files','Files in the workspace','Read, create and edit files in the workspace folder.'],['commands','Commands','Run PowerShell and terminal commands.'],['desktop','Mouse and keyboard','Look at the screen, click, type and press keys in other apps.'],['web','Web','Search the web and read pages.']];
 const piperVoices=[['de_DE-thorsten-high','Thorsten · German, clear'],['de_DE-karlsson-low','Karlsson · German, deep male'],['de_DE-pavoque-low','Pavoque · German, expressive male'],['de_DE-kerstin-medium','Kerstin · German, female'],['de_DE-ramona-low','Ramona · German, female'],['en_US-lessac-medium','Lessac · American English'],['en_GB-alan-medium','Alan · British English, calm'],['en_GB-northern_english_male-medium','Northern · British English, warm']];
-const wakeHotkeyChoices=[['CommandOrControl+Alt+J','Ctrl + Alt + J'],['CommandOrControl+Shift+J','Ctrl + Shift + J'],['CommandOrControl+Alt+H','Ctrl + Alt + H'],['CommandOrControl+Alt+K','Ctrl + Alt + K'],['Alt+Shift+J','Alt + Shift + J'],['','Off']];
 const pauseChoices=[['1.2','Short'],['1.8','Normal'],['2.6','Long'],['3.5','Very long']];
 // Describes the chosen pause in plain words, e.g. "Normal: sends after 1.8 seconds of silence."
 const pauseDescription=value=>{const seconds=Number(value)||1.8;const choice=pauseChoices.find(([v])=>Math.abs(Number(v)-seconds)<0.05);const shown=seconds.toLocaleString('en',{maximumFractionDigits:1});return (choice?choice[1]+': ':'')+'sends your question after '+shown+' seconds of silence. You can pause shorter than that to think without being cut off. Pick a longer setting if HoiClicky still interrupts you.';};
@@ -55,6 +55,38 @@ function SettingsGroup({title,description,children}){return <section className="
 function SettingRow({title,description,status,children}){return <div className="row"><div className="row-text"><span className="row-title">{status&&<span className={'row-dot '+status} aria-hidden="true"/>}{title}</span>{description&&<span className="row-desc">{description}</span>}</div><div className="row-control">{children}</div></div>;}
 function Toggle({checked,onChange,disabled,label}){return <button type="button" role="switch" aria-checked={!!checked} aria-label={label} disabled={disabled} className={'toggle'+(checked?' on':'')} onClick={()=>onChange(!checked)}><span className="toggle-knob"/></button>;}
 function Segmented({value,onChange,options,label,disabled}){return <div className="segmented" role="radiogroup" aria-label={label}>{options.map(([key,text])=><button type="button" key={key} role="radio" aria-checked={value===key} disabled={disabled} className={value===key?'active':''} onClick={()=>onChange(key)}>{text}</button>)}</div>;}
+// Click, press a combination, release to save. Escape keeps the old one; the red X removes it.
+function HotkeyRecorder({value,onChange,onRecording,label}){
+ const [recording,setRecording]=useState(false),[draft,setDraft]=useState(''),[hint,setHint]=useState('');
+ const pressed=useRef(new Set()),candidate=useRef(''),changeRef=useRef(onChange),recordingRef=useRef(onRecording);
+ changeRef.current=onChange;recordingRef.current=onRecording;
+ useEffect(()=>{
+  if(!recording)return;
+  recordingRef.current?.(true);
+  const stop=()=>setRecording(false);
+  const down=e=>{e.preventDefault();e.stopPropagation();
+   if(e.code==='Escape'&&!e.ctrlKey&&!e.altKey&&!e.metaKey&&!e.shiftKey){stop();return;}
+   pressed.current.add(e.code);
+   const accelerator=acceleratorFromEvent(e);
+   if(accelerator){candidate.current=accelerator;setDraft(prettyAccelerator(accelerator));setHint('');}
+   else if(!candidate.current)setDraft(modifiersPreview(e));
+  };
+  const up=e=>{e.preventDefault();e.stopPropagation();pressed.current.delete(e.code);
+   if(pressed.current.size>0)return;
+   if(candidate.current){const accelerator=candidate.current;stop();changeRef.current(accelerator);}
+   else{setDraft('');setHint('Use Ctrl, Alt or Win together with a key, or a function key.');}
+  };
+  window.addEventListener('keydown',down,true);window.addEventListener('keyup',up,true);window.addEventListener('blur',stop);
+  return()=>{window.removeEventListener('keydown',down,true);window.removeEventListener('keyup',up,true);window.removeEventListener('blur',stop);pressed.current.clear();candidate.current='';setDraft('');setHint('');recordingRef.current?.(false);};
+ },[recording]);
+ return <div className="hotkey">
+  <button type="button" className={'hotkey-field'+(recording?' recording':'')} aria-label={label+(value?': '+prettyAccelerator(value):': not set')+'. Click to record a new one'} onClick={()=>setRecording(r=>!r)}>
+   {recording?<span className="hotkey-live">{draft||'Press keys…'}</span>:value?acceleratorParts(value).map((part,i)=><kbd key={i}>{part}</kbd>):<span className="hotkey-empty">Not set</span>}
+  </button>
+  {value&&!recording&&<button type="button" className="hotkey-clear" aria-label="Remove hotkey" title="Remove hotkey" onClick={()=>changeRef.current('')}><X size={14}/></button>}
+  {recording&&<span className="hotkey-hint">{hint||'Release to save · Esc to cancel'}</span>}
+ </div>;
+}
 function Range({value,onChange,label,min=0,max=1,step=0.05}){return <span className="range"><input type="range" aria-label={label} min={min} max={max} step={step} value={value} onChange={e=>onChange(Number(e.target.value))}/><output>{Math.round(value*100)}%</output></span>;}
 // Live microphone level with the speech-detection threshold marked, so you can see when HoiClicky counts it as speech.
 function MicMeter({level,threshold}){return <div className="mic-meter" role="meter" aria-label="Microphone level" aria-valuemin={0} aria-valuemax={100} aria-valuenow={level}><span className={'mic-fill'+(level>threshold?' speaking':'')} style={{width:level+'%'}}/><span className="mic-threshold" style={{left:threshold+'%'}} title="Speech is detected above this line"/></div>;}
@@ -239,7 +271,7 @@ function App(){
    </SettingsGroup>
    <SettingsGroup title="Hands-free" description={'Say “Hey '+wakeName(status)+'” (or just “'+wakeName(status)+'” at the start) and then your question, without touching the keyboard. You can also say it in one go: “Hey '+wakeName(status)+', what\'s on my screen?”. Listening runs only on this PC; nothing is recorded, stored or sent before the wake word.'}>
     <SettingRow title="Listen for wake word" status={status.wakeWord&&status.microphone?(wakeState.state==='ready'?'on':'off'):undefined} description={!status.wakeAvailable?'Needs local Whisper speech recognition (speech/setup.ps1).':!status.microphone?'Turn on the microphone in Privacy first.':status.wakeWord?(wakeState.state==='ready'?'Listening for the wake word.':wakeState.state==='loading'?wakeState.value:'Starting…'):'Off. Turn it on to talk hands-free.'}><Toggle label="Listen for wake word" disabled={!status.wakeAvailable||!status.microphone} checked={!!status.wakeWord&&!!status.microphone} onChange={on=>setting({wakeWord:on})}/></SettingRow>
-    <SettingRow title="On/off hotkey" description={wakeHotkey?'Press '+(wakeHotkeyChoices.find(([v])=>v===wakeHotkey)?.[1]||wakeHotkey)+' anywhere to switch “Hey '+wakeName(status)+'” on or off.':'No hotkey. Use the switch above instead.'}><select aria-label="On/off hotkey" value={wakeHotkey} onChange={e=>setWakeHotkey(e.target.value)}>{wakeHotkeyChoices.map(([value,label])=><option key={label} value={value}>{label}</option>)}</select></SettingRow>
+    <SettingRow title="On/off hotkey" description={wakeHotkey?'Press '+prettyAccelerator(wakeHotkey)+' anywhere to switch “Hey '+wakeName(status)+'” on or off. Click the field to record a new combination.':'No hotkey. Click the field and press a combination to set one.'}><HotkeyRecorder label="On/off hotkey" value={wakeHotkey} onChange={setWakeHotkey} onRecording={on=>api.wakeHotkey(on?'':wakeHotkey).catch(e=>setError(e.message))}/></SettingRow>
     <SettingRow title="Pause before sending" description={pauseDescription(status.speechPause)}><Segmented label="Pause before sending" value={String(pauseChoices.find(([v])=>Math.abs(Number(v)-(Number(status.speechPause)||1.8))<0.05)?.[0]||'1.8')} onChange={v=>setting({speechPause:Number(v)})} options={pauseChoices}/></SettingRow>
     <div className="row row-stack"><div className="row-text"><span className="row-title">Wake words</span><span className="row-desc">Which names wake HoiClicky. Each works after “Hey” or “Hoi”, or alone at the start of a sentence. Add your own word, for example a name.</span></div><div className="lang-chips" role="group" aria-label="Wake words">{[...wakeWordPresets,...(status.wakeWords||[]).filter(w=>!wakeWordPresets.some(([id])=>id===w)).map(w=>[w,w.charAt(0).toUpperCase()+w.slice(1)])].map(([id,name])=>{const words=status.wakeWords||['clicky'];const chosen=words.includes(id);const own=!wakeWordPresets.some(([p])=>p===id);return <button key={id} type="button" aria-pressed={chosen} className={'lang-chip'+(chosen?' on':'')} title={own?'Click to remove':undefined} onClick={()=>{const next=chosen?words.filter(w=>w!==id):[...words,id];if(!next.length){setError('Keep at least one wake word.');return;}setting({wakeWords:next});}}>{chosen&&<Check size={13}/>}{name}</button>;})}<form className="wake-add" onSubmit={e=>{e.preventDefault();const word=newWakeWord.trim().toLowerCase();if(!/^[a-zäöüß]{2,20}$/.test(word)){setError('Use one word with letters only, 2 to 20 characters.');return;}const words=status.wakeWords||['clicky'];if(!words.includes(word))setting({wakeWords:[...words,word]});setNewWakeWord('');}}><input aria-label="Add your own wake word" placeholder="Own word…" value={newWakeWord} maxLength={20} onChange={e=>setNewWakeWord(e.target.value)}/><button className="btn btn-sm" type="submit" disabled={!newWakeWord.trim()}><Plus size={13}/>Add</button></form></div></div>
     <div className="row row-stack"><div className="row-text"><span className="row-title">Languages I speak</span><span className="row-desc">Speech is only recognized in these languages; anything else is read as the closest one you picked. Single foreign words inside a sentence still come through.</span></div><div className="lang-chips" role="group" aria-label="Languages I speak">{speechLanguageChoices.map(([code,name])=>{const chosen=(status.speechLanguages||['de','en']).includes(code);return <button key={code} type="button" aria-pressed={chosen} className={'lang-chip'+(chosen?' on':'')} onClick={()=>{const current=status.speechLanguages||['de','en'];const next=chosen?current.filter(c=>c!==code):[...current,code];if(!next.length){setError('Keep at least one language.');return;}setting({speechLanguages:next});}}>{chosen&&<Check size={13}/>}{name}</button>;})}</div></div>
@@ -300,7 +332,7 @@ function App(){
    <div className="rail-foot">{page!=='settings'&&<button className="rail-item" onClick={()=>openSettings('general')}><Settings size={16}/><span>Settings</span></button>}<p className="rail-privacy"><Shield size={13}/>Chats stay on this PC. Screenshots are never stored.</p></div>
   </aside>
   <main className="stage">
-   <header className="topbar"><div className="topbar-title">{page==='settings'?<><span className="crumb">Settings</span><ChevronRight size={14}/><span>{tabLabel}</span></>:<span>{currentChat?.title||'New chat'}</span>}</div><div className="window-controls"><button onClick={()=>api.window('minimize')} aria-label="Minimize"><Minus size={16}/></button><button className="close" onClick={()=>api.window('close')} aria-label="Close chat"><X size={16}/></button></div></header>
+   <header className="topbar"><div className="topbar-title">{page==='settings'?<><span className="crumb">Settings</span><ChevronRight size={14}/><span>{tabLabel}</span></>:<span>{currentChat?.title||'New chat'}</span>}</div>{status.wakeAvailable&&<button className={'wake-pill'+(status.wakeWord&&status.microphone?' on':'')} aria-pressed={!!(status.wakeWord&&status.microphone)} title={(status.wakeWord&&status.microphone?'Hands-free is listening. Click to turn it off':'Hands-free is off. Click to turn it on')+(wakeHotkey?' ('+prettyAccelerator(wakeHotkey)+')':'')} onClick={()=>toggleWakeRef.current?.()}><span className="wake-dot" aria-hidden="true"/>“Hey {wakeName(status)}”<span className="wake-state">{status.wakeWord&&status.microphone?'on':'off'}</span>{wakeHotkey&&<span className="wake-keys">{prettyAccelerator(wakeHotkey)}</span>}</button>}<div className="window-controls"><button onClick={()=>api.window('minimize')} aria-label="Minimize"><Minus size={16}/></button><button className="close" onClick={()=>api.window('close')} aria-label="Close chat"><X size={16}/></button></div></header>
    {page==='settings'?<section className="settings-page" aria-labelledby="settings-title"><div className="settings-inner"><h1 id="settings-title">{tabLabel}</h1>{settingsBody[settingsTab]}</div></section>:<>
     <div className="conversation">{messages.length===0?<div className="home">
      <button id="voice" className={'voice-orb'+(listening?' live':'')+(busy?' busy':'')} style={{'--level':Math.min(1,level/60).toFixed(2)}} onClick={voice} aria-label={listening?'Stop listening':'Start talking'} aria-pressed={listening}><span className="orb-ring"/><span className="orb-ring two"/><span className="orb-core">{listening?<AudioLines size={34}/>:<Mic size={34}/>}</span></button>
@@ -324,6 +356,7 @@ function App(){
      <div className="dock-status" aria-live="polite"><span className={'status-dot'+(listening?' live':busy?' busy':'')}/>{phase}{phase==='Speaking'&&<button className="link" onClick={()=>{stopSpeech();setPhase('Ready when you are');}}>Stop speaking</button>}</div>
     </footer>
    </>}
+   {notice&&<div className="notice-toast" role="status">{notice}</div>}
    {error&&<div className="toast" role="alert"><span>{error}</span><button onClick={()=>setError('')} aria-label="Dismiss error"><X size={15}/></button></div>}
   </main>
  </div>;
