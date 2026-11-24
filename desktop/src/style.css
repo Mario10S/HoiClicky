@@ -196,6 +196,10 @@ kbd{font-family:var(--mono);font-size:.82em;padding:1px 6px;border-radius:6px;bo
 .lang-chip:hover{background:var(--surface-2);color:var(--text)}
 .lang-chip.on{background:var(--accent-soft);border-color:color-mix(in srgb,var(--accent) 45%,transparent);color:var(--text)}
 .lang-chip.on svg{color:var(--accent)}
+/* Own wake word input */
+.wake-add{display:inline-flex;align-items:center;gap:6px;margin-left:4px}
+.wake-add input{width:130px;height:30px;padding:0 10px;border-radius:999px;border:1px solid var(--line-strong);background:var(--surface-2);font-size:12.5px;color:var(--text);outline:none}
+.wake-add input:focus-visible{border-color:var(--accent)}
 /* Microphone test */
 .mic-test{padding:14px 18px 16px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:12px}
 .mic-meter{position:relative;height:12px;border-radius:999px;background:var(--surface-3);overflow:hidden}
