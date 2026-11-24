@@ -35,6 +35,11 @@ test('plans harmless setting changes without confirmation',()=>{
 test('changes that widen what the agent may do need confirmation',()=>{
  assert.equal(planAppAction({action:'set',setting:'screen',value:true},ctx).sensitive,true);
  assert.equal(planAppAction({action:'set',setting:'screen',value:false},ctx).sensitive,false);
+ const wakeOn=planAppAction({action:'set',setting:'wake_word',value:true},ctx);
+ assert.equal(wakeOn.sensitive,true);assert.deepEqual(wakeOn.change.patch,{wakeWord:true,microphone:true});
+ assert.equal(planAppAction({action:'set',setting:'wake_word',value:false},{...ctx,status:{...ctx.status,wakeWord:true}}).sensitive,false);
+ assert.deepEqual(planAppAction({action:'set',setting:'speech_language',value:'de'},ctx).change,{type:'setting',patch:{speechLanguage:'de'}});
+ assert.equal(planAppAction({action:'set',setting:'speech_language',value:'fr'},ctx).ok,false);
  assert.equal(planAppAction({action:'set',setting:'screens',value:'all'},{...ctx,status:{...ctx.status,screens:'cursor'}}).sensitive,true);
  assert.equal(planAppAction({action:'set',setting:'screens',value:'cursor'},{...ctx,status:{...ctx.status,screens:'all'}}).sensitive,false);
  assert.equal(planAppAction({action:'set',setting:'screens',value:'both'},ctx).ok,false);

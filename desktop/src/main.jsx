@@ -51,6 +51,7 @@ function useTheme(){
 
 function App(){
  const [status,setStatus]=useState({provider:'ollama',connected:false,screen:true,screens:'all',microphone:false,model:'',key1:162,key2:164,claude:{installed:false,loggedIn:false,account:null},agent:{approval:'ask',tools:['files','commands','desktop','web'],workspace:null}}),[models,setModels]=useState([]),[page,setPage]=useState('chat'),[question,setQuestion]=useState(''),[messages,setMessages]=useState([]),[phase,setPhase]=useState('Ready when you are'),[busy,setBusy]=useState(false),[listening,setListening]=useState(false),[level,setLevel]=useState(0),[error,setError]=useState(''),[read,setRead]=useState(true);
+ const [wakeState,setWakeState]=useState({state:'off',value:''});
  const [theme,setTheme]=useTheme(),[settingsTab,setSettingsTab]=useState('general'),[voiceDownloading,setVoiceDownloading]=useState(false);
  const [chats,setChats]=useState([]),[chatId,setChatId]=useState(()=>crypto.randomUUID()),[historyReady,setHistoryReady]=useState(false),[chatSearch,setChatSearch]=useState('');
  useEffect(()=>{if(onIsland)return;api.history('list').then(items=>{setChats(items);if(items[0]){setChatId(items[0].id);setMessages(items[0].messages);}setHistoryReady(true);}).catch(e=>setError('Could not load local chats: '+e.message));},[]);
@@ -80,6 +81,7 @@ function App(){
   if(event.eventName==='error')setError(event.value);
   if(event.eventName==='islandAsk'&&!onIsland)sendRef.current?.(event.text);
   if(event.eventName==='approval')setApprovals(items=>items.some(a=>a.id===event.id)?items:[...items,event]);
+  if(event.eventName==='wakeState')setWakeState({state:event.state,value:event.value||''});
   if(event.eventName==='approvalDone')setApprovals(items=>items.filter(a=>a.id!==event.id));
   if(event.eventName==='toggleVoice'&&!onIsland)document.getElementById('voice')?.click();
   if(event.eventName==='voice'){
@@ -93,7 +95,7 @@ function App(){
   }
  });},[]);
  useEffect(()=>{end.current?.scrollIntoView({behavior:'smooth'});},[messages]);
- async function setting(patch){const next={...status,...patch};setStatus(next);try{await api.settings({screen:next.screen,microphone:next.microphone,model:next.model||'',key1:next.key1,key2:next.key2,provider:next.provider,screens:next.screens||'all',agentApproval:next.agent?.approval||'ask',agentTools:next.agent?.tools||[],...(typeof next.agent?.workspace==='string'?{workspace:next.agent.workspace}:{})});}catch(e){setError(e.message);}}
+ async function setting(patch){const next={...status,...patch};setStatus(next);try{await api.settings({screen:next.screen,microphone:next.microphone,model:next.model||'',key1:next.key1,key2:next.key2,provider:next.provider,screens:next.screens||'all',wakeWord:!!next.wakeWord,speechLanguage:next.speechLanguage||'auto',agentApproval:next.agent?.approval||'ask',agentTools:next.agent?.tools||[],...(typeof next.agent?.workspace==='string'?{workspace:next.agent.workspace}:{})});}catch(e){setError(e.message);}}
  async function voice(){if(voiceRef.current){await api.voiceStop();return;}if(!status.microphone){setError('Enable microphone access in Settings first.');setPage('settings');return;}transcript.current='';setError('');setListening(true);voiceRef.current=true;setPhase('Opening microphone');try{await api.voice();setQuestion(transcript.current);}catch(e){setError(e.message);}finally{voiceRef.current=false;setListening(false);setLevel(0);setPhase('Ready');if(!onIsland&&autoVoice.current){autoVoice.current=false;if(!voiceFailed.current&&transcript.current.trim())sendRef.current?.(transcript.current.trim());}}}
  async function send(voiceText,opts={}){const isVoice=typeof voiceText==='string';const agent=opts.agent??(agentOn&&agentProviders.includes(status.provider));let retry=null;const text=(isVoice?voiceText:question).trim();if(!text||sending.current||(!isVoice&&listening))return;if(!historyReady){setError('Local chat history is still loading. Try again in a moment.');return;}if(status.provider==='chatgpt'&&!status.connected){setError('Connect ChatGPT in Settings to send a question.');setQuestion(text);return;}if(status.provider==='claude'&&!status.claude?.loggedIn){setError('Sign in with Claude in Settings to send a question.');setQuestion(text);return;}if(!status.model){setError('Choose a model first.');setQuestion(text);return;}stopSpeech();sending.current=true;setQuestion('');setBusy(true);setError('');setPhase('Thinking');setMessages(m=>opts.retry?[...m,{role:'hoi',text:''}]:[...m,{role:'you',text},{role:'hoi',text:''}]);setAgentRunning(agent);try{await api.settings({screen:status.screen,microphone:status.microphone,model:status.model,key1:status.key1,key2:status.key2,provider:status.provider});setPhase(status.screen?'Looking at your screen':'Thinking');const answer=await api.ask({question:text,model:status.model,screen:status.screen,agent,app:agentProviders.includes(status.provider)?appContext({page,status,models,sound,read,agentOn,talkKeys,chats,voiceVolume:voiceVolume(voiceConfig)}):undefined,history:messages.filter(m=>m.text.trim()).slice(-12).map(m=>({role:m.role==='you'?'user':'assistant',text:m.text}))});if(!agent&&status.provider==='claude'&&answer.trim()==='[[AGENT_MODE]]'){setMessages(m=>m.map((x,i)=>i===m.length-1?{...x,text:'_Agent mode is on because you asked for it._'}:x));setPhase('Answered');setAgentOn(true);retry=text;return;}
  const {text:clean,actions}=parseAppCommands(answer);if(actions.length&&agentProviders.includes(status.provider))setPendingActions(actions);
@@ -145,7 +147,7 @@ function App(){
  const glance=[
   {key:'model',icon:<Sparkles size={14}/>,label:modelName,tab:'ai',state:status.model?'on':'warn'},
   {key:'screen',icon:<Monitor size={14}/>,label:status.screen?(status.screens==='cursor'?'One monitor':'All monitors'):'Screen off',tab:'privacy',state:status.screen?'on':'off'},
-  {key:'mic',icon:<Mic size={14}/>,label:status.microphone?'Mic on · '+talk:'Mic off',tab:'privacy',state:status.microphone?'on':'off'},
+  {key:'mic',icon:<Mic size={14}/>,label:status.microphone?(status.wakeWord?'“Hey Clicky” · '+talk:'Mic on · '+talk):'Mic off',tab:'privacy',state:status.microphone?'on':'off'},
   {key:'voice',icon:<Volume2 size={14}/>,label:read?voiceName+' · '+Math.round(voiceVolume(voiceConfig)*100)+'%':'Voice off',tab:'voice',state:read?'on':'off'},
   ...(agentProviders.includes(status.provider)?[{key:'agent',icon:<Bot size={14}/>,label:agentOn?'Agent on · '+({ask:'asks first',files:'files free',auto:'autonomous'})[status.agent?.approval||'ask']:'Agent off',tab:'agent',state:agentOn?(status.agent?.approval==='auto'?'warn':'on'):'off'}]:[]),
  ];
@@ -187,6 +189,10 @@ function App(){
    </SettingsGroup>
   </>,
   voice:<>
+   <SettingsGroup title="Hands-free" description="Say “Hey Clicky” or “Hoi Clicky” and then your question, without touching the keyboard. You can also say it in one go: “Hey Clicky, what's on my screen?”. Listening runs only on this PC; nothing is recorded, stored or sent before the wake word.">
+    <SettingRow title="“Hey Clicky”" status={status.wakeWord&&status.microphone?(wakeState.state==='ready'?'on':'off'):undefined} description={!status.wakeAvailable?'Needs local Whisper speech recognition (speech/setup.ps1).':!status.microphone?'Turn on the microphone in Privacy first.':status.wakeWord?(wakeState.state==='ready'?'Listening for the wake word.':wakeState.state==='loading'?wakeState.value:'Starting…'):'Off. Turn it on to talk hands-free.'}><Toggle label="Hey Clicky wake word" disabled={!status.wakeAvailable||!status.microphone} checked={!!status.wakeWord&&!!status.microphone} onChange={on=>setting({wakeWord:on})}/></SettingRow>
+    <SettingRow title="Speech language" description="The language you speak to HoiClicky. Auto detects it each time."><Segmented label="Speech language" value={status.speechLanguage||'auto'} onChange={speechLanguage=>setting({speechLanguage})} options={[['auto','Auto'],['de','Deutsch'],['en','English']]}/></SettingRow>
+   </SettingsGroup>
    <SettingsGroup title="Spoken answers" description="HoiClicky can read every answer aloud.">
     <SettingRow title="Speak answers" description="Read each reply aloud automatically."><Toggle label="Speak answers" checked={read} onChange={setRead}/></SettingRow>
     <SettingRow title="Voice volume"><Range label="Voice volume" value={voiceVolume(voiceConfig)} onChange={volume=>{setVoiceConfig({...voiceConfig,volume});if(speechAudio.current)speechAudio.current.volume=volume;}}/></SettingRow>
@@ -245,7 +251,7 @@ function App(){
     <div className="conversation">{messages.length===0?<div className="home">
      <button id="voice" className={'voice-orb'+(listening?' live':'')+(busy?' busy':'')} style={{'--level':Math.min(1,level/60).toFixed(2)}} onClick={voice} aria-label={listening?'Stop listening':'Start talking'} aria-pressed={listening}><span className="orb-ring"/><span className="orb-ring two"/><span className="orb-core">{listening?<AudioLines size={34}/>:<Mic size={34}/>}</span></button>
      <h1>{listening?'Listening…':'How can I help?'}</h1>
-     <p className="home-hint">{listening?'Release '+talk+' or click the orb to send.':<>Click the orb or hold <kbd>{talk}</kbd> to talk, or type below.</>}</p>
+     <p className="home-hint">{listening?'Pause briefly or release '+talk+' to send.':status.wakeWord&&status.microphone?<>Say <strong>“Hey Clicky”</strong>, click the orb or hold <kbd>{talk}</kbd>.</>:<>Click the orb or hold <kbd>{talk}</kbd> to talk, or type below.</>}</p>
      <div className="glance" aria-label="Status">{glance.map(item=><button key={item.key} className={'glance-chip state-'+item.state} onClick={()=>openSettings(item.tab)} title="Open settings">{item.icon}<span>{item.label}</span></button>)}</div>
     </div>:<div className="thread">{messages.map((m,i)=><article key={i} className={'msg '+(m.role==='you'?'msg-user':'msg-ai')}>{m.role==='you'?<div className="bubble">{m.text}</div>:<><div className="msg-meta"><span className="msg-avatar"><Sparkles size={12}/></span>HoiClicky</div>{m.text?<FormattedAnswer text={m.text}/>:<div className="typing" aria-label="Thinking"><i/><i/><i/></div>}</>}</article>)}{approvals.map(item=><ApprovalCard key={item.id} item={item}/>)}</div>}<div ref={end}/></div>
     <footer className="dock">
