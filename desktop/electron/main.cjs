@@ -77,6 +77,8 @@ app.whenReady().then(()=>{
   if(!globalShortcut.register(accelerator,()=>main.webContents.send('event',{eventName:'toggleWake'})))throw Error('That hotkey is already used by another app. Pick a different one.');
   wakeHotkey=accelerator;return true;
  });
+ // The floating panel's hands-free switch asks the chat window to toggle, so the hotkey and both windows share one path.
+ ipcMain.handle('island-toggle-wake',event=>{if(event.sender!==island?.webContents)throw Error('Invalid sender');main.webContents.send('event',{eventName:'toggleWake'});return true;});
  ipcMain.handle('pick-workspace',async event=>{if(event.sender!==main.webContents)throw Error('Invalid sender');const choice=await dialog.showOpenDialog(main,{title:'Choose a workspace folder for agent mode',properties:['openDirectory','createDirectory']});return choice.canceled?null:choice.filePaths[0]||null;});
  ipcMain.handle('settings',(_,data)=>{
   if(typeof data?.screen!=='boolean'||typeof data?.microphone!=='boolean'||typeof data?.model!=='string')throw Error('Invalid settings');
@@ -102,7 +104,7 @@ app.whenReady().then(()=>{
   try{return answer+await activateControl(call,target);}
   finally{if(hiddenPointer&&!hiddenPointer.isDestroyed())hiddenPointer.showInactive();}
  });
- ipcMain.handle('presentation',(event,data)=>{if(event.sender!==main.webContents)throw Error('Invalid sender');if(typeof data?.phase!=='string'||typeof data?.answer!=='string')throw Error('Invalid presentation');glow?.set(glowState({enabled:data.glow!==false,listening:!!data.listening,busy:!!data.busy||/transcrib|opening microphone/i.test(data.phase),agent:!!data.agentRunning}));const text=value=>typeof value==='string'?value:'';island.webContents.send('event',{eventName:'presentation',phase:data.phase.slice(0,160),answer:data.answer.slice(-24000),question:text(data.question).slice(0,600),model:text(data.model).slice(0,80),talk:text(data.talk).slice(0,40),busy:!!data.busy,agentRunning:!!data.agentRunning,notice:text(data.notice).slice(0,80),listening:!!data.listening,error:text(data.error).slice(0,400)});});
+ ipcMain.handle('presentation',(event,data)=>{if(event.sender!==main.webContents)throw Error('Invalid sender');if(typeof data?.phase!=='string'||typeof data?.answer!=='string')throw Error('Invalid presentation');glow?.set(glowState({enabled:data.glow!==false,listening:!!data.listening,busy:!!data.busy||/transcrib|opening microphone/i.test(data.phase),agent:!!data.agentRunning}));const text=value=>typeof value==='string'?value:'';island.webContents.send('event',{eventName:'presentation',phase:data.phase.slice(0,160),answer:data.answer.slice(-24000),question:text(data.question).slice(0,600),model:text(data.model).slice(0,80),talk:text(data.talk).slice(0,40),busy:!!data.busy,agentRunning:!!data.agentRunning,notice:text(data.notice).slice(0,80),wakeOn:!!data.wakeOn,wakeName:text(data.wakeName).slice(0,30),listening:!!data.listening,error:text(data.error).slice(0,400)});});
  // Follow-up questions typed into the floating panel are sent through the chat window, so history and providers stay in one place.
  ipcMain.handle('island-ask',(event,text)=>{if(event.sender!==island.webContents)throw Error('Invalid sender');if(typeof text!=='string'||!text.trim()||text.length>32000)throw Error('Invalid question');main.webContents.send('event',{eventName:'islandAsk',text:text.trim()});});
  ipcMain.handle('window',(_,action)=>{if(action==='quit'){app.quit();return;}if(!main||main.isDestroyed())return;if(action==='minimize'||action==='close')main.hide();else{main.show();main.focus();}});
