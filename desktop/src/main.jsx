@@ -61,6 +61,8 @@ function App(){
  const [micTest,setMicTest]=useState({running:false,loading:'',level:0,threshold:6,partial:'',lines:[],monitor:false});
  const startMicTest=async monitor=>{setMicTest(t=>({...t,running:true,loading:'Starting…',partial:'',lines:[],monitor}));try{await api.micTest({action:'start',monitor});}catch(e){setMicTest(t=>({...t,running:false,loading:''}));setError(e.message);}};
  const stopMicTest=()=>{api.micTest({action:'stop'}).catch(()=>{});setMicTest(t=>({...t,running:false,loading:'',level:0,partial:''}));};
+ const [glowOn,setGlowOnState]=useState(()=>{try{return localStorage.getItem('hoi.glow')!=='0';}catch{return true;}});
+ const setGlowOn=value=>{setGlowOnState(value);try{localStorage.setItem('hoi.glow',value?'1':'0');}catch{}};
  const [theme,setTheme]=useTheme(),[settingsTab,setSettingsTab]=useState('general'),[voiceDownloading,setVoiceDownloading]=useState(false);
  const [chats,setChats]=useState([]),[chatId,setChatId]=useState(()=>crypto.randomUUID()),[historyReady,setHistoryReady]=useState(false),[chatSearch,setChatSearch]=useState('');
  useEffect(()=>{if(onIsland)return;api.history('list').then(items=>{setChats(items);if(items[0]){setChatId(items[0].id);setMessages(items[0].messages);}setHistoryReady(true);}).catch(e=>setError('Could not load local chats: '+e.message));},[]);
@@ -151,7 +153,7 @@ function App(){
  }
  const lastAnswer=messages.filter(m=>m.role==='hoi').at(-1)?.text||'';
  lastAnswerRef.current=lastAnswer;
- useEffect(()=>{if(!onIsland)api.presentation({phase,answer:listening||/transcrib|opening microphone|loading local/i.test(phase)?'':lastAnswer,question:messages.filter(m=>m.role==='you').at(-1)?.text||'',model:models.find(m=>m.Slug===status.model)?.Name||'',talk:talkLabel(status.key1,status.key2),busy,agentRunning,listening,error}).catch(()=>{});},[phase,lastAnswer,busy,agentRunning,listening,error,messages,models,status.model,status.key1,status.key2]);
+ useEffect(()=>{if(!onIsland)api.presentation({phase,answer:listening||/transcrib|opening microphone|loading local/i.test(phase)?'':lastAnswer,question:messages.filter(m=>m.role==='you').at(-1)?.text||'',model:models.find(m=>m.Slug===status.model)?.Name||'',talk:talkLabel(status.key1,status.key2),busy,agentRunning,listening,error,glow:glowOn}).catch(()=>{});},[phase,lastAnswer,busy,agentRunning,listening,error,glowOn,messages,models,status.model,status.key1,status.key2]);
 
  if(onIsland)return <FloatingAssistant phase={phase} level={level}/>;
  const locked=busy||listening||voiceRef.current;
@@ -178,6 +180,7 @@ function App(){
   general:<>
    <SettingsGroup title="Appearance" description="HoiClicky follows Windows unless you pick a theme.">
     <SettingRow title="Theme"><Segmented label="Theme" value={theme} onChange={setTheme} options={[['system','System'],['dark','Dark'],['light','Light']]}/></SettingRow>
+    <SettingRow title="Screen edge glow" description="The edges of every screen glow mint while HoiClicky listens and lavender while it thinks or works as an agent. It never shows up in screenshots."><Toggle label="Screen edge glow" checked={glowOn} onChange={setGlowOn}/></SettingRow>
    </SettingsGroup>
    <SettingsGroup title="Hold to talk" description="Hold the key while you speak and release it to send. Set Key 2 to None for a single key; one you rarely type with, like F8 or Right Ctrl, works best.">
     {['key1','key2'].map((field,index)=><SettingRow key={field} title={'Key '+(index+1)}><select aria-label={'Talk key '+(index+1)} disabled={locked} value={status[field]??(index===0?162:164)} onChange={e=>setting({[field]:Number(e.target.value)})}>{index===1&&<option value={0} disabled={status.key1===32}>None · single key</option>}{talkKeys.map(([value,name])=><option key={value} value={value} disabled={value===status[index===0?'key2':'key1']||(index===0&&value===32&&!status.key2)}>{name}</option>)}</select></SettingRow>)}

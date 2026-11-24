@@ -3,6 +3,8 @@ const {app,BrowserWindow,ipcMain,globalShortcut,screen,dialog,shell,safeStorage,
 const {spawn}=require('node:child_process');const fs=require('node:fs');const path=require('node:path');const readline=require('node:readline');
 const {registerSounds}=require('./completion-sound.cjs');
 const piper=require('./piper.cjs');
+const {createGlow,glowState}=require('./glow.cjs');
+let glow=null;
 const {attachIslandMotion,initialIslandBounds}=require('./island-motion.cjs');
 const {requestsClick,namedWindowToClose}=require('./action-intent.cjs');
 const {activateControl}=require('./activate-control.cjs');
@@ -34,7 +36,7 @@ function setPointer(enabled){
 function emit(data){for(const w of [main,island])if(w&&!w.isDestroyed())w.webContents.send('event',data);}
 function call(method,args){return new Promise((resolve,reject)=>{const id=++seq;pending.set(id,{resolve,reject});service.stdin.write(JSON.stringify({id,method,args})+'\n');});}
 function create(options,query){const win=new BrowserWindow({...options,webPreferences:{preload:path.join(__dirname,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true,backgroundThrottling:false,autoplayPolicy:'no-user-gesture-required'}});win.webContents.setWindowOpenHandler(()=>({action:'deny'}));win.webContents.on('will-navigate',event=>event.preventDefault());win.loadFile(path.join(__dirname,'../dist/index.html'),{query});return win;}
-app.on('before-quit',()=>{setPointer(false);stopIslandMotion();globalShortcut.unregisterAll();service?.kill();});app.on('window-all-closed',()=>app.quit());
+app.on('before-quit',()=>{glow?.destroy();setPointer(false);stopIslandMotion();globalShortcut.unregisterAll();service?.kill();});app.on('window-all-closed',()=>app.quit());
 app.whenReady().then(()=>{
  registerHistory({ipcMain,app,dialog,getMain:()=>main});
  registerSounds({ipcMain,dialog,app,getMain:()=>main});
@@ -53,7 +55,7 @@ app.whenReady().then(()=>{
  service.on('exit',()=>fail('The local service stopped. Restart HoiClicky.'));
  service.stderr.resume();
  service.stdin.on('error',()=>fail('The local service connection closed. Restart HoiClicky.'));
- readline.createInterface({input:service.stdout}).on('line',line=>{try{const data=JSON.parse(line);if(data.eventName){if(data.eventName==='point'&&[data.x,data.y].every(Number.isFinite)){lastPoint={x:data.x,y:data.y};const target=screen.screenToDipPoint({x:data.x,y:data.y});showTrail(target.x,target.y,target,'circle');}else if(data.eventName==='arrow'&&[data.x1,data.y1,data.x2,data.y2].every(Number.isFinite)){const a=screen.screenToDipPoint({x:data.x1,y:data.y1}),b=screen.screenToDipPoint({x:data.x2,y:data.y2});showTrail(a.x,a.y,b,'arrow');}else emit(data);return;}const p=pending.get(data.id);if(p){pending.delete(data.id);data.error?p.reject(new Error(data.error)):p.resolve(data.result);}}catch{}});
+ readline.createInterface({input:service.stdout}).on('line',line=>{try{const data=JSON.parse(line);if(data.eventName){if(data.eventName==='voice'&&data.kind==='level')glow?.setLevel(Number(data.value)/60);if(data.eventName==='point'&&[data.x,data.y].every(Number.isFinite)){lastPoint={x:data.x,y:data.y};const target=screen.screenToDipPoint({x:data.x,y:data.y});showTrail(target.x,target.y,target,'circle');}else if(data.eventName==='arrow'&&[data.x1,data.y1,data.x2,data.y2].every(Number.isFinite)){const a=screen.screenToDipPoint({x:data.x1,y:data.y1}),b=screen.screenToDipPoint({x:data.x2,y:data.y2});showTrail(a.x,a.y,b,'arrow');}else emit(data);return;}const p=pending.get(data.id);if(p){pending.delete(data.id);data.error?p.reject(new Error(data.error)):p.resolve(data.result);}}catch{}});
  ipcMain.handle('status',()=>call('status'));
  for(const method of ['connect','disconnect','claudeConnect','claudeDisconnect','models','voice','voiceStop','agentStop'])ipcMain.handle(method,()=>call(method));
  // Agent approvals can be answered from the chat window or the floating panel.
@@ -87,7 +89,7 @@ app.whenReady().then(()=>{
   try{return answer+await activateControl(call,target);}
   finally{if(hiddenPointer&&!hiddenPointer.isDestroyed())hiddenPointer.showInactive();}
  });
- ipcMain.handle('presentation',(event,data)=>{if(event.sender!==main.webContents)throw Error('Invalid sender');if(typeof data?.phase!=='string'||typeof data?.answer!=='string')throw Error('Invalid presentation');const text=value=>typeof value==='string'?value:'';island.webContents.send('event',{eventName:'presentation',phase:data.phase.slice(0,160),answer:data.answer.slice(-24000),question:text(data.question).slice(0,600),model:text(data.model).slice(0,80),talk:text(data.talk).slice(0,40),busy:!!data.busy,agentRunning:!!data.agentRunning,listening:!!data.listening,error:text(data.error).slice(0,400)});});
+ ipcMain.handle('presentation',(event,data)=>{if(event.sender!==main.webContents)throw Error('Invalid sender');if(typeof data?.phase!=='string'||typeof data?.answer!=='string')throw Error('Invalid presentation');glow?.set(glowState({enabled:data.glow!==false,listening:!!data.listening,busy:!!data.busy||/transcrib|opening microphone/i.test(data.phase),agent:!!data.agentRunning}));const text=value=>typeof value==='string'?value:'';island.webContents.send('event',{eventName:'presentation',phase:data.phase.slice(0,160),answer:data.answer.slice(-24000),question:text(data.question).slice(0,600),model:text(data.model).slice(0,80),talk:text(data.talk).slice(0,40),busy:!!data.busy,agentRunning:!!data.agentRunning,listening:!!data.listening,error:text(data.error).slice(0,400)});});
  // Follow-up questions typed into the floating panel are sent through the chat window, so history and providers stay in one place.
  ipcMain.handle('island-ask',(event,text)=>{if(event.sender!==island.webContents)throw Error('Invalid sender');if(typeof text!=='string'||!text.trim()||text.length>32000)throw Error('Invalid question');main.webContents.send('event',{eventName:'islandAsk',text:text.trim()});});
  ipcMain.handle('window',(_,action)=>{if(action==='quit'){app.quit();return;}if(!main||main.isDestroyed())return;if(action==='minimize'||action==='close')main.hide();else{main.show();main.focus();}});
@@ -98,6 +100,7 @@ app.whenReady().then(()=>{
  main.setContentProtection(true);island.setContentProtection(true);
  setPointer(true);
  stopIslandMotion=attachIslandMotion(ipcMain,()=>island,islandStore);
+ glow=createGlow({BrowserWindow,screen});
  main.once('ready-to-show',()=>main.show());island.once('ready-to-show',()=>{island.setAlwaysOnTop(true,'screen-saver');island.showInactive();});
  island.on('blur',()=>{if(!island.isDestroyed()&&island.isVisible())island.setAlwaysOnTop(true,'screen-saver');});
 }).catch(error=>{console.error('HoiClicky startup failed:',error);app.quit();});
