@@ -22,6 +22,7 @@ const agentProviders=['claude','chatgpt'];
 const voiceVolume=config=>Math.min(1,Math.max(0,Number.isFinite(Number(config?.volume))?Number(config.volume):1));
 const agentGroups=[['files','Files in the workspace','Read, create and edit files in the workspace folder.'],['commands','Commands','Run PowerShell and terminal commands.'],['desktop','Mouse and keyboard','Look at the screen, click, type and press keys in other apps.'],['web','Web','Search the web and read pages.']];
 const piperVoices=[['de_DE-thorsten-high','Thorsten · German, clear'],['de_DE-karlsson-low','Karlsson · German, deep male'],['de_DE-pavoque-low','Pavoque · German, expressive male'],['de_DE-kerstin-medium','Kerstin · German, female'],['de_DE-ramona-low','Ramona · German, female'],['en_US-lessac-medium','Lessac · American English'],['en_GB-alan-medium','Alan · British English, calm'],['en_GB-northern_english_male-medium','Northern · British English, warm']];
+const wakeHotkeyChoices=[['CommandOrControl+Alt+J','Ctrl + Alt + J'],['CommandOrControl+Shift+J','Ctrl + Shift + J'],['CommandOrControl+Alt+H','Ctrl + Alt + H'],['CommandOrControl+Alt+K','Ctrl + Alt + K'],['Alt+Shift+J','Alt + Shift + J'],['','Off']];
 const pauseChoices=[['1.2','Short'],['1.8','Normal'],['2.6','Long'],['3.5','Very long']];
 // Describes the chosen pause in plain words, e.g. "Normal: sends after 1.8 seconds of silence."
 const pauseDescription=value=>{const seconds=Number(value)||1.8;const choice=pauseChoices.find(([v])=>Math.abs(Number(v)-seconds)<0.05);const shown=seconds.toLocaleString('en',{maximumFractionDigits:1});return (choice?choice[1]+': ':'')+'sends your question after '+shown+' seconds of silence. You can pause shorter than that to think without being cut off. Pick a longer setting if HoiClicky still interrupts you.';};
@@ -66,6 +67,9 @@ function useTheme(){
 
 function App(){
  const [status,setStatus]=useState({provider:'ollama',connected:false,screen:true,screens:'all',microphone:false,model:'',key1:162,key2:164,claude:{installed:false,loggedIn:false,account:null},agent:{approval:'ask',tools:['files','commands','desktop','web'],workspace:null}}),[models,setModels]=useState([]),[page,setPage]=useState('chat'),[question,setQuestion]=useState(''),[messages,setMessages]=useState([]),[phase,setPhase]=useState('Ready when you are'),[busy,setBusy]=useState(false),[listening,setListening]=useState(false),[level,setLevel]=useState(0),[error,setError]=useState(''),[read,setRead]=useState(true);
+ const [wakeHotkey,setWakeHotkeyState]=useState(()=>{try{const v=localStorage.getItem('hoi.wakeHotkey');return v===null?'CommandOrControl+Alt+J':v;}catch{return 'CommandOrControl+Alt+J';}}),[notice,setNotice]=useState('');
+ const setWakeHotkey=value=>{setWakeHotkeyState(value);try{localStorage.setItem('hoi.wakeHotkey',value);}catch{}};
+ const toggleWakeRef=useRef(null);
  const [wakeState,setWakeState]=useState({state:'off',value:''}),[newWakeWord,setNewWakeWord]=useState('');
  const [micTest,setMicTest]=useState({running:false,loading:'',level:0,threshold:6,partial:'',lines:[],monitor:false});
  const startMicTest=async monitor=>{setMicTest(t=>({...t,running:true,loading:'Starting…',partial:'',lines:[],monitor}));try{await api.micTest({action:'start',monitor});}catch(e){setMicTest(t=>({...t,running:false,loading:''}));setError(e.message);}};
@@ -105,6 +109,7 @@ function App(){
   if(event.eventName==='islandAsk'&&!onIsland)sendRef.current?.(event.text);
   if(event.eventName==='islandSpeech'&&!onIsland)speechToggleRef.current?.(event.action);
   if(event.eventName==='approval')setApprovals(items=>items.some(a=>a.id===event.id)?items:[...items,event]);
+  if(event.eventName==='toggleWake'&&!onIsland)toggleWakeRef.current?.();
   if(event.eventName==='micTest'&&!onIsland){const {kind,value}=event;setMicTest(t=>kind==='level'?{...t,level:Number(value)}:kind==='threshold'?{...t,threshold:Number(value)}:kind==='ready'?{...t,loading:''}:kind==='loading'?{...t,loading:value}:kind==='partial'?{...t,partial:value}:kind==='text'?{...t,partial:'',lines:[...t.lines,{text:value,wake:false}].slice(-6)}:kind==='wake'?{...t,lines:t.lines.map((l,i)=>i===t.lines.length-1?{...l,wake:true}:l)}:kind==='stopped'?{...t,running:false,loading:'',level:0}:kind==='error'?{...t,running:false,loading:''}:t);if(kind==='error')setError('Microphone test: '+value);}
   if(event.eventName==='wakeState')setWakeState({state:event.state,value:event.value||''});
   if(event.eventName==='approvalDone')setApprovals(items=>items.filter(a=>a.id!==event.id));
@@ -129,6 +134,9 @@ function App(){
  speechToggleRef.current=action=>{if(action==='stop'||isSpeaking()||phase==='Speaking'){shutUp();return;}const spoken=speechText(lastAnswerRef.current);if(spoken)speakAnswer(spoken);};
  // App actions Claude requested run after the answer is in, so chat switching and saving see the final messages.
  const [pendingActions,setPendingActions]=useState(null);
+ useEffect(()=>{if(onIsland)return;api.wakeHotkey(wakeHotkey).catch(e=>setError(e.message));},[wakeHotkey]);
+ useEffect(()=>{if(!notice)return;const timer=setTimeout(()=>setNotice(''),2600);return()=>clearTimeout(timer);},[notice]);
+ toggleWakeRef.current=()=>{const on=!(status.wakeWord&&status.microphone);if(on&&!status.wakeAvailable){setNotice('Hands-free needs local Whisper');return;}setting(on?{wakeWord:true,microphone:true}:{wakeWord:false});setNotice('“Hey '+wakeName(status)+'” '+(on?'on':'off'));};
  useEffect(()=>{if(micTest.running&&(page!=='settings'||settingsTab!=='voice'))stopMicTest();},[page,settingsTab]);
  useEffect(()=>{if(onIsland||busy||!pendingActions)return;const actions=pendingActions;setPendingActions(null);runAppActions(actions).catch(e=>setError(e.message));},[pendingActions,busy]);
  async function runAppActions(actions){
@@ -162,7 +170,7 @@ function App(){
  }
  const lastAnswer=messages.filter(m=>m.role==='hoi').at(-1)?.text||'';
  lastAnswerRef.current=lastAnswer;
- useEffect(()=>{if(!onIsland)api.presentation({phase,answer:listening||/transcrib|opening microphone|loading local/i.test(phase)?'':lastAnswer,question:messages.filter(m=>m.role==='you').at(-1)?.text||'',model:models.find(m=>m.Slug===status.model)?.Name||'',talk:talkLabel(status.key1,status.key2),busy,agentRunning,listening,error,glow:glowOn}).catch(()=>{});},[phase,lastAnswer,busy,agentRunning,listening,error,glowOn,messages,models,status.model,status.key1,status.key2]);
+ useEffect(()=>{if(!onIsland)api.presentation({phase,answer:listening||/transcrib|opening microphone|loading local/i.test(phase)?'':lastAnswer,question:messages.filter(m=>m.role==='you').at(-1)?.text||'',model:models.find(m=>m.Slug===status.model)?.Name||'',talk:talkLabel(status.key1,status.key2),busy,agentRunning,listening,error,glow:glowOn,notice}).catch(()=>{});},[phase,lastAnswer,busy,agentRunning,listening,error,glowOn,notice,messages,models,status.model,status.key1,status.key2]);
 
  if(onIsland)return <FloatingAssistant phase={phase} level={level}/>;
  const locked=busy||listening||voiceRef.current;
@@ -231,6 +239,7 @@ function App(){
    </SettingsGroup>
    <SettingsGroup title="Hands-free" description={'Say “Hey '+wakeName(status)+'” (or just “'+wakeName(status)+'” at the start) and then your question, without touching the keyboard. You can also say it in one go: “Hey '+wakeName(status)+', what\'s on my screen?”. Listening runs only on this PC; nothing is recorded, stored or sent before the wake word.'}>
     <SettingRow title="Listen for wake word" status={status.wakeWord&&status.microphone?(wakeState.state==='ready'?'on':'off'):undefined} description={!status.wakeAvailable?'Needs local Whisper speech recognition (speech/setup.ps1).':!status.microphone?'Turn on the microphone in Privacy first.':status.wakeWord?(wakeState.state==='ready'?'Listening for the wake word.':wakeState.state==='loading'?wakeState.value:'Starting…'):'Off. Turn it on to talk hands-free.'}><Toggle label="Listen for wake word" disabled={!status.wakeAvailable||!status.microphone} checked={!!status.wakeWord&&!!status.microphone} onChange={on=>setting({wakeWord:on})}/></SettingRow>
+    <SettingRow title="On/off hotkey" description={wakeHotkey?'Press '+(wakeHotkeyChoices.find(([v])=>v===wakeHotkey)?.[1]||wakeHotkey)+' anywhere to switch “Hey '+wakeName(status)+'” on or off.':'No hotkey. Use the switch above instead.'}><select aria-label="On/off hotkey" value={wakeHotkey} onChange={e=>setWakeHotkey(e.target.value)}>{wakeHotkeyChoices.map(([value,label])=><option key={label} value={value}>{label}</option>)}</select></SettingRow>
     <SettingRow title="Pause before sending" description={pauseDescription(status.speechPause)}><Segmented label="Pause before sending" value={String(pauseChoices.find(([v])=>Math.abs(Number(v)-(Number(status.speechPause)||1.8))<0.05)?.[0]||'1.8')} onChange={v=>setting({speechPause:Number(v)})} options={pauseChoices}/></SettingRow>
     <div className="row row-stack"><div className="row-text"><span className="row-title">Wake words</span><span className="row-desc">Which names wake HoiClicky. Each works after “Hey” or “Hoi”, or alone at the start of a sentence. Add your own word, for example a name.</span></div><div className="lang-chips" role="group" aria-label="Wake words">{[...wakeWordPresets,...(status.wakeWords||[]).filter(w=>!wakeWordPresets.some(([id])=>id===w)).map(w=>[w,w.charAt(0).toUpperCase()+w.slice(1)])].map(([id,name])=>{const words=status.wakeWords||['clicky'];const chosen=words.includes(id);const own=!wakeWordPresets.some(([p])=>p===id);return <button key={id} type="button" aria-pressed={chosen} className={'lang-chip'+(chosen?' on':'')} title={own?'Click to remove':undefined} onClick={()=>{const next=chosen?words.filter(w=>w!==id):[...words,id];if(!next.length){setError('Keep at least one wake word.');return;}setting({wakeWords:next});}}>{chosen&&<Check size={13}/>}{name}</button>;})}<form className="wake-add" onSubmit={e=>{e.preventDefault();const word=newWakeWord.trim().toLowerCase();if(!/^[a-zäöüß]{2,20}$/.test(word)){setError('Use one word with letters only, 2 to 20 characters.');return;}const words=status.wakeWords||['clicky'];if(!words.includes(word))setting({wakeWords:[...words,word]});setNewWakeWord('');}}><input aria-label="Add your own wake word" placeholder="Own word…" value={newWakeWord} maxLength={20} onChange={e=>setNewWakeWord(e.target.value)}/><button className="btn btn-sm" type="submit" disabled={!newWakeWord.trim()}><Plus size={13}/>Add</button></form></div></div>
     <div className="row row-stack"><div className="row-text"><span className="row-title">Languages I speak</span><span className="row-desc">Speech is only recognized in these languages; anything else is read as the closest one you picked. Single foreign words inside a sentence still come through.</span></div><div className="lang-chips" role="group" aria-label="Languages I speak">{speechLanguageChoices.map(([code,name])=>{const chosen=(status.speechLanguages||['de','en']).includes(code);return <button key={code} type="button" aria-pressed={chosen} className={'lang-chip'+(chosen?' on':'')} onClick={()=>{const current=status.speechLanguages||['de','en'];const next=chosen?current.filter(c=>c!==code):[...current,code];if(!next.length){setError('Keep at least one language.');return;}setting({speechLanguages:next});}}>{chosen&&<Check size={13}/>}{name}</button>;})}</div></div>
@@ -364,7 +373,8 @@ function FloatingAssistant({level}){
   const before=previous.current;previous.current=view;
   if((view.busy||before.busy)&&view.answer&&view.answer!==before.answer){setMode('panel');return;}
   if(view.error&&view.error!==before.error){setMode('panel');return;}
-  setMode(current=>active&&current==='orb'?'pill':!active&&current==='pill'?'orb':current);
+  if(view.notice&&view.notice!==before.notice){setMode(current=>current==='orb'?'pill':current);return;}
+  setMode(current=>active&&current==='orb'?'pill':!active&&!view.notice&&current==='pill'?'orb':current);
  },[view]);
  useEffect(()=>{api.islandLayout({mode}).catch(()=>{});},[mode]);
  useEffect(()=>{try{localStorage.setItem('hoi.island.pinned',pinned?'1':'0');}catch{}},[pinned]);
@@ -384,7 +394,7 @@ function FloatingAssistant({level}){
  const rimLevel={'--hc-level':Math.min(1,level/60).toFixed(2)};
 
  if(mode==='orb')return <div className={'hc-root mode-orb state-'+state} style={rimLevel}><button className="hc-orb hc-rim" title="Open HoiClicky · drag to move" aria-label="Open HoiClicky" {...orbGesture}>{orb}</button></div>;
- if(mode==='pill')return <div className={'hc-root mode-pill state-'+state} style={rimLevel}><div className="hc-pill hc-rim"><div className="hc-pill-open" role="button" tabIndex={0} title="Open panel · drag to move" aria-label={label+'. Open panel'} {...pillGesture}>{orb}<span className="hc-pill-label" aria-live="polite">{label}</span><Wave level={level} active={active}/></div>{view.agentRunning&&<button className="hc-stop-pill" title="Stop agent" aria-label="Stop agent" onPointerDown={e=>e.stopPropagation()} onKeyDown={e=>e.stopPropagation()} onClick={stopAgent}><Square size={12}/>Stop</button>}</div></div>;
+ if(mode==='pill')return <div className={'hc-root mode-pill state-'+state} style={rimLevel}><div className="hc-pill hc-rim"><div className="hc-pill-open" role="button" tabIndex={0} title="Open panel · drag to move" aria-label={label+'. Open panel'} {...pillGesture}>{orb}<span className="hc-pill-label" aria-live="polite">{view.notice||label}</span><Wave level={level} active={active}/></div>{view.agentRunning&&<button className="hc-stop-pill" title="Stop agent" aria-label="Stop agent" onPointerDown={e=>e.stopPropagation()} onKeyDown={e=>e.stopPropagation()} onClick={stopAgent}><Square size={12}/>Stop</button>}</div></div>;
  return <div className={'hc-root mode-panel state-'+state} style={rimLevel} onKeyDown={e=>{if(e.key==='Escape')setMode('orb');}}>
   <section className="hc-panel hc-rim" onMouseEnter={()=>{hovering.current=true;}} onMouseLeave={()=>{hovering.current=false;}} aria-label="HoiClicky answer">
    <header className="hc-head">
