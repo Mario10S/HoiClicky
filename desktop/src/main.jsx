@@ -1,7 +1,7 @@
 import {parseMarkdown,inlineTokens} from './markdown.mjs';
 import {playCompletion} from './completion-audio.mjs';
 import {parseAppCommands,stripAppMarkers,planAppAction,appContext} from './app-commands.mjs';
-import {speechText} from './speech-text.mjs';
+import {speechText,detectLanguage} from './speech-text.mjs';
 import React,{useEffect,useRef,useState} from 'react';
 import {createRoot} from 'react-dom/client';
 import {Trash2,ArrowLeft,ArrowUp,AudioLines,Check,ChevronDown,Command,Eye,MessageSquare,Mic,Minus,Monitor,Plus,Settings,Shield,Square,Volume2,X,Sparkles,Pin,PinOff,Minimize2,Copy,ExternalLink,Bot,MousePointer2,Terminal,Globe,FileText,FolderOpen,RefreshCw,Search,ChevronRight} from 'lucide-react';
@@ -25,6 +25,12 @@ const piperVoices=[['de_DE-thorsten-high','Thorsten · German'],['en_US-lessac-m
 const pauseChoices=[['1.2','Short'],['1.8','Normal'],['2.6','Long'],['3.5','Very long']];
 // Describes the chosen pause in plain words, e.g. "Normal: sends after 1.8 seconds of silence."
 const pauseDescription=value=>{const seconds=Number(value)||1.8;const choice=pauseChoices.find(([v])=>Math.abs(Number(v)-seconds)<0.05);const shown=seconds.toLocaleString('en',{maximumFractionDigits:1});return (choice?choice[1]+': ':'')+'sends your question after '+shown+' seconds of silence. You can pause shorter than that to think without being cut off. Pick a longer setting if HoiClicky still interrupts you.';};
+const germanVoices=piperVoices.filter(([id])=>id.startsWith('de_')),englishVoices=piperVoices.filter(([id])=>id.startsWith('en_'));
+const voiceLabel=id=>piperVoices.find(([v])=>v===id)?.[1].split(' ·')[0]||id;
+// Fills in the per-language voices for voice settings saved before they existed.
+const withVoiceDefaults=c=>({autoLanguage:true,voiceDe:'de_DE-thorsten-high',voiceEn:c?.voiceId?.startsWith('en_')?c.voiceId:'en_GB-alan-medium',...c});
+// Which Piper voice reads a text: the German or English voice when matching is on, otherwise the single chosen voice.
+const piperVoiceFor=(config,text)=>{const v=withVoiceDefaults(config);if(!v.autoLanguage)return v.voiceId||'de_DE-thorsten-high';const lang=detectLanguage(text);return lang==='en'?v.voiceEn:lang==='de'?v.voiceDe:(v.voiceId||v.voiceDe);};
 const wakeWordPresets=[['clicky','Clicky'],['jarvis','Jarvis'],['computer','Computer']];
 const wakeName=status=>{const w=(status?.wakeWords||['clicky'])[0]||'clicky';return w.charAt(0).toUpperCase()+w.slice(1);};
 const speechLanguageChoices=[['de','Deutsch'],['en','English'],['fr','Français'],['es','Español'],['it','Italiano'],['pt','Português'],['nl','Nederlands'],['pl','Polski'],['tr','Türkçe'],['sq','Shqip'],['hr','Hrvatski'],['sr','Srpski'],['bs','Bosanski'],['ru','Русский'],['uk','Українська'],['ar','العربية']];
@@ -82,7 +88,7 @@ function App(){
  function stopSpeech(){speechSynthesis.cancel();speechAudio.current?.pause();speechAudio.current=null;}
  const isSpeaking=()=>!!speechAudio.current||speechSynthesis.speaking;
  function shutUp(){stopSpeech();setPhase(p=>p==='Speaking'?'Answered':p);}
- async function speakAnswer(text){stopSpeech();setPhase('Speaking');try{if(voiceConfig.provider==='elevenlabs'){const data=await api.ttsSpeak({text,voiceId:voiceConfig.voiceId});const audio=new Audio('data:audio/mpeg;base64,'+data);audio.volume=voiceVolume(voiceConfig);speechAudio.current=audio;audio.onended=()=>{if(speechAudio.current===audio)speechAudio.current=null;setPhase('Answered');};await audio.play();}else if(voiceConfig.provider==='piper'){const data=await api.piperSpeak({text,voice:voiceConfig.voiceId||'de_DE-thorsten-high'});const audio=new Audio('data:audio/wav;base64,'+data);audio.volume=voiceVolume(voiceConfig);speechAudio.current=audio;audio.onended=()=>{if(speechAudio.current===audio)speechAudio.current=null;setPhase('Answered');};await audio.play();}else{const utterance=new SpeechSynthesisUtterance(text);utterance.volume=voiceVolume(voiceConfig);utterance.onend=utterance.onerror=()=>setPhase('Answered');speechSynthesis.speak(utterance);}}catch(e){setVoiceError(e.message);setPhase('Answered');}}
+ async function speakAnswer(text){stopSpeech();setPhase('Speaking');try{if(voiceConfig.provider==='elevenlabs'){const data=await api.ttsSpeak({text,voiceId:voiceConfig.voiceId});const audio=new Audio('data:audio/mpeg;base64,'+data);audio.volume=voiceVolume(voiceConfig);speechAudio.current=audio;audio.onended=()=>{if(speechAudio.current===audio)speechAudio.current=null;setPhase('Answered');};await audio.play();}else if(voiceConfig.provider==='piper'){const data=await api.piperSpeak({text,voice:piperVoiceFor(voiceConfig,text)});const audio=new Audio('data:audio/wav;base64,'+data);audio.volume=voiceVolume(voiceConfig);speechAudio.current=audio;audio.onended=()=>{if(speechAudio.current===audio)speechAudio.current=null;setPhase('Answered');};await audio.play();}else{const utterance=new SpeechSynthesisUtterance(text);const lang=detectLanguage(text);if(lang)utterance.lang=lang==='de'?'de-DE':'en-US';utterance.volume=voiceVolume(voiceConfig);utterance.onend=utterance.onerror=()=>setPhase('Answered');speechSynthesis.speak(utterance);}}catch(e){setVoiceError(e.message);setPhase('Answered');}}
  async function loadVoiceOptions(){try{const voices=await api.ttsVoices();setVoiceVoices(voices);setVoiceConfig(c=>({...c,voiceId:c.voiceId||voices[0]?.id||''}));setVoiceError('');}catch(e){setVoiceError(e.message);}}
 
  const [approvals,setApprovals]=useState([]),[agentRunning,setAgentRunning]=useState(false),[agentOn,setAgentOnState]=useState(()=>{try{return localStorage.getItem('hoi.agent')==='1';}catch{return false;}});
@@ -162,7 +168,8 @@ function App(){
  const locked=busy||listening||voiceRef.current;
  const talk=talkLabel(status.key1,status.key2);
  const modelName=models.find(m=>m.Slug===status.model)?.Name||'No model chosen';
- const voiceName=voiceConfig.provider==='piper'?(piperVoices.find(([id])=>id===voiceConfig.voiceId)?.[1].split(' ·')[0]||'Thorsten'):voiceConfig.provider==='elevenlabs'?'ElevenLabs':'Windows voice';
+ const vs=withVoiceDefaults(voiceConfig);
+ const voiceName=voiceConfig.provider==='piper'?(vs.autoLanguage?voiceLabel(vs.voiceDe)+' / '+voiceLabel(vs.voiceEn):voiceLabel(vs.voiceId||'de_DE-thorsten-high')):voiceConfig.provider==='elevenlabs'?'ElevenLabs':'Windows voice';
  const openSettings=tab=>{setSettingsTab(tab);setPage('settings');};
  const currentChat=chats.find(c=>c.id===chatId);
  const visibleChats=chats.filter(c=>(c.title+' '+c.messages.map(m=>m.text).join(' ')).toLowerCase().includes(chatSearch.toLowerCase()));
@@ -234,10 +241,13 @@ function App(){
    </SettingsGroup>
    <SettingsGroup title="Answer voice" description="Piper voices are free and run on this PC. ElevenLabs sends only the answer text and needs its own account; usage may be paid.">
     <SettingRow title="Voice engine"><select aria-label="Voice engine" value={voiceConfig.provider} onChange={e=>setVoiceConfig({...voiceConfig,provider:e.target.value})}><option value="piper">Piper · free, on this PC</option><option value="system">Windows voice · on this PC</option><option value="elevenlabs">ElevenLabs · cloud</option></select></SettingRow>
-    {voiceConfig.provider==='piper'&&<SettingRow title="Voice" description="Download a voice once; it stays on this PC."><div className="row-actions"><select aria-label="Piper voice" value={voiceConfig.voiceId||'de_DE-thorsten-high'} onChange={e=>setVoiceConfig({...voiceConfig,voiceId:e.target.value})}>{piperVoices.map(([id,name])=><option key={id} value={id}>{name}</option>)}</select><button className="btn" disabled={voiceDownloading} onClick={async()=>{setVoiceDownloading(true);setVoiceError('');try{await api.piperInstall(voiceConfig.voiceId||'de_DE-thorsten-high');setVoiceError('Voice installed. Try the preview.');}catch(e){setVoiceError(e.message);}finally{setVoiceDownloading(false);}}}>{voiceDownloading?'Downloading…':'Download'}</button></div></SettingRow>}
+    {voiceConfig.provider==='piper'&&<>
+     <SettingRow title="Match the answer's language" description="German answers are read with the German voice and English answers with the English voice."><Toggle label="Match the answer's language" checked={vs.autoLanguage} onChange={on=>setVoiceConfig({...vs,autoLanguage:on})}/></SettingRow>
+     {(vs.autoLanguage?[['voiceDe','German voice',germanVoices,'Hallo! So klinge ich, wenn ich dir auf Deutsch antworte.'],['voiceEn','English voice',englishVoices,'Hello! This is how I sound when I answer in English.']]:[['voiceId','Voice',piperVoices,'Hello! This is your HoiClicky voice preview.']]).map(([field,title,options,sample])=>{const value=vs[field]||options[0][0];return <SettingRow key={field} title={title} description="Download a voice once; it stays on this PC."><div className="row-actions"><select aria-label={title} value={value} onChange={e=>setVoiceConfig({...vs,[field]:e.target.value})}>{options.map(([id,name])=><option key={id} value={id}>{name}</option>)}</select><button className="btn" disabled={!!voiceDownloading} onClick={async()=>{setVoiceDownloading(value);setVoiceError('');try{await api.piperInstall(value);setVoiceError(voiceLabel(value)+' installed. Try the preview.');}catch(e){setVoiceError(e.message);}finally{setVoiceDownloading(false);}}}>{voiceDownloading===value?'Downloading…':'Download'}</button><button className="btn icon-btn" aria-label={'Preview '+title} title="Play preview" onClick={()=>speakAnswer(sample)}><Volume2 size={15}/></button></div></SettingRow>;})}
+    </>}
     {voiceConfig.provider==='elevenlabs'&&<><SettingRow title="API key" description={voiceKeyState?'A key is saved securely on this PC.':'Your ElevenLabs API key, stored encrypted.'}><div className="row-actions"><input type="password" aria-label="ElevenLabs API key" placeholder={voiceKeyState?'Saved':'Paste key'} value={voiceKey} onChange={e=>setVoiceKey(e.target.value)}/><button className="btn" onClick={async()=>{try{setVoiceKeyState(await api.ttsKey(voiceKey));setVoiceKey('');await loadVoiceOptions();}catch(e){setVoiceError(e.message);}}}>Save</button></div></SettingRow>
      <SettingRow title="Voice"><div className="row-actions"><select aria-label="ElevenLabs voice" value={voiceConfig.voiceId} onChange={e=>setVoiceConfig({...voiceConfig,voiceId:e.target.value})}>{voiceVoices.map(v=><option key={v.id} value={v.id}>{v.name}</option>)}</select><button className="btn" onClick={loadVoiceOptions}>Load voices</button></div></SettingRow></>}
-    <SettingRow title="Preview" description="Hear the selected voice at the chosen volume."><button className="btn" onClick={()=>speakAnswer('Hello! This is your HoiClicky voice preview.')}><Volume2 size={14}/>Play preview</button></SettingRow>
+    {voiceConfig.provider!=='piper'&&<SettingRow title="Preview" description="Hear the selected voice at the chosen volume."><button className="btn" onClick={()=>speakAnswer('Hello! This is your HoiClicky voice preview.')}><Volume2 size={14}/>Play preview</button></SettingRow>}
     {voiceError&&<p className={/installed/i.test(voiceError)?'field-note':'field-error'} role="status">{voiceError}</p>}
    </SettingsGroup>
   </>,
