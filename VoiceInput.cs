@@ -11,7 +11,7 @@ internal sealed class VoiceInput : IDisposable {
   var python=Path.Combine(speechRoot,".venv","Scripts","python.exe");
   var useWhisper=File.Exists(python)&&Directory.Exists(Path.Combine(speechRoot,"model"));
   var start = new ProcessStartInfo(useWhisper?python:Path.Combine(AppContext.BaseDirectory,"SpeechHost.exe")) { UseShellExecute=false, CreateNoWindow=true, RedirectStandardInput=true, RedirectStandardOutput=true, RedirectStandardError=true };
-  if(useWhisper) { start.ArgumentList.Add("-u");start.ArgumentList.Add(Path.Combine(speechRoot,"recognize.py"));start.Environment["HOICLICKY_SPEECH_LANGUAGE"]=LocalSettings.Current.SpeechLanguage;start.Environment["HOICLICKY_MIC_GAIN"]=LocalSettings.Current.MicGain.ToString("0.##",System.Globalization.CultureInfo.InvariantCulture); }
+  if(useWhisper) { start.ArgumentList.Add("-u");start.ArgumentList.Add(Path.Combine(speechRoot,"recognize.py"));start.Environment["HOICLICKY_SPEECH_LANGUAGES"]=string.Join(",",LocalSettings.Current.SpeechLanguages);start.Environment["HOICLICKY_MIC_GAIN"]=LocalSettings.Current.MicGain.ToString("0.##",System.Globalization.CultureInfo.InvariantCulture); }
   else update("loading","Using legacy Windows recognition. Run speech/setup.ps1 for improved local Whisper recognition.");
   using var child = Process.Start(start) ?? throw new InvalidOperationException("Windows speech could not start.");
   process=child;

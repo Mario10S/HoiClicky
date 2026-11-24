@@ -17,8 +17,9 @@ internal sealed class LocalSettings
     public bool AllowMicrophone { get; set; }
     // Hands-free "Hey Clicky" listening; off until the user turns it on.
     public bool WakeWord { get; set; }
-    // Whisper language: "auto", "de" or "en".
-    public string SpeechLanguage { get; set; } = "auto";
+    // Languages speech recognition may use (Whisper codes); everything else is ignored. German and English by default.
+    public string[] SpeechLanguages { get; set; } = ["de", "en"];
+    public static readonly string[] SupportedSpeechLanguages = ["de", "en", "fr", "es", "it", "pt", "nl", "pl", "tr", "sq", "hr", "sr", "bs", "ru", "uk", "ar"];
     // Software microphone gain for all speech features, 0.5 to 8.
     public double MicGain { get; set; } = 1.0;
     public string? Provider { get; set; }

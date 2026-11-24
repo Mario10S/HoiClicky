@@ -28,7 +28,7 @@ internal sealed class WakeListener:IDisposable {
    var found=Locate();if(found is null){onEvent("error","Hands-free listening needs local Whisper. Run speech/setup.ps1 first.");return;}
    var start=new ProcessStartInfo(found.Value.Python){UseShellExecute=false,CreateNoWindow=true,RedirectStandardInput=true,RedirectStandardOutput=true,RedirectStandardError=true};
    start.ArgumentList.Add("-u");start.ArgumentList.Add(found.Value.Script);
-   start.Environment["HOICLICKY_SPEECH_LANGUAGE"]=LocalSettings.Current.SpeechLanguage;
+   start.Environment["HOICLICKY_SPEECH_LANGUAGES"]=string.Join(",",LocalSettings.Current.SpeechLanguages);
    start.Environment["HOICLICKY_MIC_GAIN"]=MicTest.Gain(LocalSettings.Current.MicGain);
    var child=Process.Start(start);if(child is null){onEvent("error","Hands-free listening could not start.");return;}
    process=child;_=child.StandardError.ReadToEndAsync();

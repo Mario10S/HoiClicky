@@ -19,7 +19,7 @@ internal sealed class MicTest:IDisposable {
    var script=Path.Combine(Path.GetDirectoryName(found.Value.Script)!,"mictest.py");
    var start=new ProcessStartInfo(found.Value.Python){UseShellExecute=false,CreateNoWindow=true,RedirectStandardInput=true,RedirectStandardOutput=true,RedirectStandardError=true};
    start.ArgumentList.Add("-u");start.ArgumentList.Add(script);
-   start.Environment["HOICLICKY_SPEECH_LANGUAGE"]=LocalSettings.Current.SpeechLanguage;
+   start.Environment["HOICLICKY_SPEECH_LANGUAGES"]=string.Join(",",LocalSettings.Current.SpeechLanguages);
    start.Environment["HOICLICKY_MIC_GAIN"]=Gain(LocalSettings.Current.MicGain);
    start.Environment["HOICLICKY_MIC_MONITOR"]=monitor?"1":"0";
    var child=Process.Start(start);if(child is null){onEvent("error","The microphone test could not start.");return;}
