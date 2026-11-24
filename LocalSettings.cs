@@ -24,6 +24,8 @@ internal sealed class LocalSettings
     public static readonly string[] SupportedSpeechLanguages = ["de", "en", "fr", "es", "it", "pt", "nl", "pl", "tr", "sq", "hr", "sr", "bs", "ru", "uk", "ar"];
     // Software microphone gain for all speech features, 0.5 to 8.
     public double MicGain { get; set; } = 1.0;
+    // Seconds of silence that end a hands-free question, 0.8 to 5.
+    public double SpeechPause { get; set; } = 1.8;
     public string? Provider { get; set; }
     public string? Model { get; set; }
     public int TalkKey1 { get; set; } = 162;
