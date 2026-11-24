@@ -17,4 +17,5 @@ desktop/dist/
 
 speech/.venv/
 speech/model/
+speech/model-wake/
 __pycache__/
