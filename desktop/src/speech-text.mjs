@@ -3,7 +3,17 @@
 // markdown symbols and emoji, and stops after the first few sentences.
 const MAX_CHARS=420,MAX_SENTENCES=4;
 
-const isGerman=text=>/\b(und|ich|du|nicht|ist|das|die|der|ein|eine|mit|auf|für|habe|kannst|bitte)\b/i.test(text);
+const GERMAN=/\b(und|ich|du|nicht|ist|das|die|der|den|dem|ein|eine|einen|mit|auf|für|habe|hast|kannst|bitte|auch|noch|schon|wir|sie|es|ja|nein|danke|gerne|hier|sind|wird|kein|keine|aber|oder|wenn|weil|dann|mein|dein|zu|von|im)\b/gi;
+const ENGLISH=/\b(the|and|is|are|you|your|it|to|of|in|that|for|with|this|on|i|what|can|have|has|not|be|was|will|do|does|here|there|yes|no|thanks|please|my|we|they|if|but|or|an|a)\b/gi;
+// Guesses whether a text is German or English from common words and umlauts; null when it can't tell.
+export function detectLanguage(text){
+ const value=String(text??'');
+ const de=(value.match(GERMAN)||[]).length+(value.match(/[äöüßÄÖÜ]/g)||[]).length*0.5;
+ const en=(value.match(ENGLISH)||[]).length;
+ if(de===0&&en===0)return null;
+ return de>=en?'de':'en';
+}
+const isGerman=text=>detectLanguage(text)==='de';
 
 export function speechText(answer){
  let text=String(answer??'').replace(/\r\n/g,'\n');
