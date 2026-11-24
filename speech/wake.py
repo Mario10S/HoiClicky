@@ -94,8 +94,8 @@ def main():
     import numpy as np
     import sounddevice as sd
     from faster_whisper import WhisperModel
-    language = os.environ.get('HOICLICKY_SPEECH_LANGUAGE', 'auto')
-    language = None if language == 'auto' else language
+    from langs import allowed_languages, transcribe_allowed
+    languages = allowed_languages()
     if not MAIN_MODEL.exists():
         raise RuntimeError('Local speech is not set up. Run speech/setup.ps1 first.')
     if not WAKE_MODEL.exists():
@@ -144,9 +144,10 @@ def main():
                 yield block
 
     def transcribe(model, audio, **extra):
-        segments, _ = model.transcribe(audio, language=language, beam_size=extra.pop('beam_size', 1),
+        # Only the languages chosen in Settings; a foreign guess is redone in the best allowed one.
+        text, _ = transcribe_allowed(model, audio, languages, beam_size=extra.pop('beam_size', 1),
             condition_on_previous_text=False, without_timestamps=True, **extra)
-        return ' '.join(s.text.strip() for s in segments).strip()
+        return text
 
     listener = Segmenter(end_silence_blocks=6, max_blocks=60)
     with sd.InputStream(samplerate=RATE, channels=1, dtype='float32', blocksize=BLOCK, callback=callback):

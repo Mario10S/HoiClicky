@@ -18,8 +18,8 @@ def main():
     import numpy as np
     import sounddevice as sd
     from faster_whisper import WhisperModel
-    language = os.environ.get('HOICLICKY_SPEECH_LANGUAGE', 'auto')
-    language = None if language == 'auto' else language
+    from langs import allowed_languages, transcribe_allowed
+    languages = allowed_languages()
     if not WAKE_MODEL.exists():
         emit('loading', 'Downloading the small speech model (about 75 MB, once)')
         from faster_whisper.utils import download_model
@@ -57,9 +57,9 @@ def main():
             queue.append(block)
 
     def transcribe(audio):
-        segments, _ = model.transcribe(audio, language=language, beam_size=1, condition_on_previous_text=False,
+        text, _ = transcribe_allowed(model, audio, languages, beam_size=1, condition_on_previous_text=False,
             without_timestamps=True, initial_prompt=PROMPT)
-        return ' '.join(s.text.strip() for s in segments).strip()
+        return text
 
     segmenter = Segmenter(end_silence_blocks=6, max_blocks=80)
     last_partial, last_threshold = 0.0, -1
