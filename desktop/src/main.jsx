@@ -202,7 +202,7 @@ function App(){
  }
  const lastAnswer=messages.filter(m=>m.role==='hoi').at(-1)?.text||'';
  lastAnswerRef.current=lastAnswer;
- useEffect(()=>{if(!onIsland)api.presentation({phase,answer:listening||/transcrib|opening microphone|loading local/i.test(phase)?'':lastAnswer,question:messages.filter(m=>m.role==='you').at(-1)?.text||'',model:models.find(m=>m.Slug===status.model)?.Name||'',talk:talkLabel(status.key1,status.key2),busy,agentRunning,listening,error,glow:glowOn,notice}).catch(()=>{});},[phase,lastAnswer,busy,agentRunning,listening,error,glowOn,notice,messages,models,status.model,status.key1,status.key2]);
+ useEffect(()=>{if(!onIsland)api.presentation({phase,answer:listening||/transcrib|opening microphone|loading local/i.test(phase)?'':lastAnswer,question:messages.filter(m=>m.role==='you').at(-1)?.text||'',model:models.find(m=>m.Slug===status.model)?.Name||'',talk:talkLabel(status.key1,status.key2),busy,agentRunning,listening,error,glow:glowOn,notice,wakeOn:!!(status.wakeWord&&status.microphone&&status.wakeAvailable),wakeName:wakeName(status)}).catch(()=>{});},[phase,lastAnswer,busy,agentRunning,listening,error,glowOn,notice,status.wakeWord,status.microphone,status.wakeAvailable,status.wakeWords,messages,models,status.model,status.key1,status.key2]);
 
  if(onIsland)return <FloatingAssistant phase={phase} level={level}/>;
  const locked=busy||listening||voiceRef.current;
@@ -426,15 +426,16 @@ function FloatingAssistant({level}){
  const orb=<span className="hc-core" style={{transform:`translate(${logo.x}px,${logo.y}px) rotate(${logo.tilt}deg)`}}><Sparkles size={mode==='orb'?20:15}/></span>;
  const rimLevel={'--hc-level':Math.min(1,level/60).toFixed(2)};
 
- if(mode==='orb')return <div className={'hc-root mode-orb state-'+state} style={rimLevel}><button className="hc-orb hc-rim" title="Open HoiClicky · drag to move" aria-label="Open HoiClicky" {...orbGesture}>{orb}</button></div>;
- if(mode==='pill')return <div className={'hc-root mode-pill state-'+state} style={rimLevel}><div className="hc-pill hc-rim"><div className="hc-pill-open" role="button" tabIndex={0} title="Open panel · drag to move" aria-label={label+'. Open panel'} {...pillGesture}>{orb}<span className="hc-pill-label" aria-live="polite">{view.notice||label}</span><Wave level={level} active={active}/></div>{view.agentRunning&&<button className="hc-stop-pill" title="Stop agent" aria-label="Stop agent" onPointerDown={e=>e.stopPropagation()} onKeyDown={e=>e.stopPropagation()} onClick={stopAgent}><Square size={12}/>Stop</button>}</div></div>;
+ if(mode==='orb')return <div className={'hc-root mode-orb state-'+state+(view.wakeOn?' wake-on':'')} style={rimLevel}><button className="hc-orb hc-rim" title="Open HoiClicky · drag to move" aria-label="Open HoiClicky" {...orbGesture}>{orb}</button></div>;
+ if(mode==='pill')return <div className={'hc-root mode-pill state-'+state+(view.wakeOn?' wake-on':'')} style={rimLevel}><div className="hc-pill hc-rim"><div className="hc-pill-open" role="button" tabIndex={0} title="Open panel · drag to move" aria-label={label+'. Open panel'} {...pillGesture}>{orb}<span className="hc-pill-label" aria-live="polite">{view.notice||label}</span><Wave level={level} active={active}/></div>{view.agentRunning&&<button className="hc-stop-pill" title="Stop agent" aria-label="Stop agent" onPointerDown={e=>e.stopPropagation()} onKeyDown={e=>e.stopPropagation()} onClick={stopAgent}><Square size={12}/>Stop</button>}</div></div>;
  return <div className={'hc-root mode-panel state-'+state} style={rimLevel} onKeyDown={e=>{if(e.key==='Escape')setMode('orb');}}>
   <section className="hc-panel hc-rim" onMouseEnter={()=>{hovering.current=true;}} onMouseLeave={()=>{hovering.current=false;}} aria-label="HoiClicky answer">
    <header className="hc-head">
     <button className="hc-mark" title="Fold into orb" aria-label="Fold into orb" onClick={()=>setMode('orb')}>{orb}</button>
-    <div className="hc-title"><strong aria-live="polite">{label}</strong>{view.model&&<span className="hc-model">{view.model}</span>}</div>
+    <div className="hc-title"><strong aria-live="polite">{view.notice||label}</strong>{view.model&&!view.notice&&<span className="hc-model">{view.model}</span>}</div>
     {active&&<Wave level={level} active/>}
     <div className="hc-head-actions">
+     {view.wakeName&&<button className={'hc-wake'+(view.wakeOn?' on':'')} aria-pressed={!!view.wakeOn} title={view.wakeOn?'Hands-free is listening. Click to turn it off':'Hands-free is off. Click to turn it on'} onClick={()=>api.islandToggleWake().catch(()=>{})}><span className="hc-wake-dot" aria-hidden="true"/>{view.wakeName} · {view.wakeOn?'on':'off'}</button>}
      {view.agentRunning&&<button className="hc-agent-stop" title="Stop agent" aria-label="Stop agent" onClick={stopAgent}><Square size={12}/>Stop</button>}
      <button className={'hc-icon'+(pinned?' on':'')} aria-pressed={pinned} title={pinned?'Unpin · folds away when idle':'Pin · stays open'} aria-label={pinned?'Unpin panel':'Pin panel'} onClick={()=>setPinned(v=>!v)}>{pinned?<PinOff size={15}/>:<Pin size={15}/>}</button>
      <button className="hc-icon" title="Fold into orb (Esc)" aria-label="Fold into orb" onClick={()=>setMode('orb')}><Minimize2 size={15}/></button>
