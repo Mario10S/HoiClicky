@@ -9,7 +9,9 @@ class Program {
  static ClaudeStatus claude=new(false,false,null);
  // Hands-free "Hey Clicky": the listener reports the wake word and the question; the UI reuses the hold-to-talk flow.
  static readonly WakeListener wake=new(OnWake);
- static bool wakeActive;
+ // Microphone test in Settings; the wake listener pauses while it runs so they don't both transcribe.
+ static readonly MicTest micTest=new((kind,value)=>{Emit(new{eventName="micTest",kind,value});if(kind=="stopped")wake.Resume();});
+ static bool wakeActive,wakeReady;
  static bool WakeWanted=>LocalSettings.Current.WakeWord&&LocalSettings.Current.AllowMicrophone;
  static void OnWake(string kind,string value){
   switch(kind){
@@ -24,9 +26,9 @@ class Program {
     break;
    case "text":if(wakeActive){Emit(new{eventName="voice",kind="text",value});FinishWake();}break;
    case "nothing":if(wakeActive)FinishWake();break;
-   case "ready":Emit(new{eventName="wakeState",state="ready",value});break;
+   case "ready":wakeReady=true;Emit(new{eventName="wakeState",state="ready",value});break;
    case "error":if(wakeActive)FinishWake();Emit(new{eventName="error",value="Hands-free listening: "+value});break;
-   case "stopped":if(wakeActive)FinishWake();Emit(new{eventName="wakeState",state="off",value=""});break;
+   case "stopped":wakeReady=false;if(wakeActive)FinishWake();Emit(new{eventName="wakeState",state="off",value=""});break;
   }
  }
  static void FinishWake(){if(!wakeActive)return;wakeActive=false;Emit(new{eventName="hold",value=false});Emit(new{eventName="voice",kind="complete",value=""});gate.Release();}
@@ -47,8 +49,8 @@ class Program {
   try{var map=DesktopMcpCore.LoadMapping();if(map is null)return;var (x,y)=DesktopMcpCore.ToScreen(input.GetProperty("x").GetDouble(),input.GetProperty("y").GetDouble(),map);Emit(new{eventName="point",x,y});}catch{}
  }
  static void Emit(object value){lock(outputLock)Console.WriteLine(JsonSerializer.Serialize(value));}
- static object Status()=>new {connected=OAuthService.HasCredentials,account=OAuthService.HasCredentials?OAuthService.AccountLabel:null,screen=LocalSettings.Current.AllowScreenCapture,screens=LocalSettings.Current.ScreenScope,microphone=LocalSettings.Current.AllowMicrophone,provider=AiProviders.Selected,model=LocalSettings.Current.Model,key1=LocalSettings.Current.TalkKey1,key2=LocalSettings.Current.TalkKey2,claude=new{installed=claude.Installed,loggedIn=claude.LoggedIn,account=claude.Label},agent=new{approval=LocalSettings.Current.AgentApproval,tools=LocalSettings.Current.AgentTools,workspace=LocalSettings.Current.AgentWorkspace},wakeWord=LocalSettings.Current.WakeWord,wakeAvailable=WakeListener.Available,wakeRunning=wake.Running,speechLanguage=LocalSettings.Current.SpeechLanguage};
- static async Task Main(string[] argv){if(argv.Contains("--mcp-desktop")){await DesktopMcp.RunAsync();return;}using var keys=new HoldKeyMonitor(OnHold);wake.Sync(WakeWanted);var requests=new List<Task>();string? line;while((line=await Console.In.ReadLineAsync())!=null){try{var msg=JsonDocument.Parse(line).RootElement.Clone();requests.RemoveAll(task=>task.IsCompleted);requests.Add(Handle(msg));}catch{}}voice.Stop();wake.Dispose();await Task.WhenAll(requests);voice.Dispose();}
+ static object Status()=>new {connected=OAuthService.HasCredentials,account=OAuthService.HasCredentials?OAuthService.AccountLabel:null,screen=LocalSettings.Current.AllowScreenCapture,screens=LocalSettings.Current.ScreenScope,microphone=LocalSettings.Current.AllowMicrophone,provider=AiProviders.Selected,model=LocalSettings.Current.Model,key1=LocalSettings.Current.TalkKey1,key2=LocalSettings.Current.TalkKey2,claude=new{installed=claude.Installed,loggedIn=claude.LoggedIn,account=claude.Label},agent=new{approval=LocalSettings.Current.AgentApproval,tools=LocalSettings.Current.AgentTools,workspace=LocalSettings.Current.AgentWorkspace},wakeWord=LocalSettings.Current.WakeWord,wakeAvailable=WakeListener.Available,wakeRunning=wake.Running,wakeReady=wakeReady&&wake.Running,speechLanguage=LocalSettings.Current.SpeechLanguage,micGain=LocalSettings.Current.MicGain,micTestRunning=micTest.Running};
+ static async Task Main(string[] argv){if(argv.Contains("--mcp-desktop")){await DesktopMcp.RunAsync();return;}using var keys=new HoldKeyMonitor(OnHold);wake.Sync(WakeWanted);var requests=new List<Task>();string? line;while((line=await Console.In.ReadLineAsync())!=null){try{var msg=JsonDocument.Parse(line).RootElement.Clone();requests.RemoveAll(task=>task.IsCompleted);requests.Add(Handle(msg));}catch{}}voice.Stop();micTest.Dispose();wake.Dispose();await Task.WhenAll(requests);voice.Dispose();}
  static bool heldVoice;
  static void OnHold(bool down){
   if(!down){if(heldVoice){voice.Stop();Emit(new{eventName="hold",value=false});}return;}
@@ -61,6 +63,9 @@ class Program {
   // Approvals and Stop must not wait for the gate: the running agent holds it.
   if(method=="approve"){var a=msg.GetProperty("args");var found=approvals.TryGetValue(a.GetProperty("id").GetString()??"",out var pending)&&pending.TrySetResult(a.GetProperty("allow").GetBoolean());Emit(new{id,result=found});return;}
   if(method=="agentStop"){agentRun?.Cancel();Emit(new{id,result=true});return;}
+  // The microphone test runs beside everything else and never waits for the gate.
+  if(method=="micTestStart"){if(!LocalSettings.Current.AllowMicrophone){Emit(new{id,error="Turn on the microphone in Privacy first."});return;}var monitor=msg.TryGetProperty("args",out var mt)&&mt.ValueKind==JsonValueKind.Object&&mt.TryGetProperty("monitor",out var m)&&m.ValueKind==JsonValueKind.True;wake.Pause();micTest.Start(monitor);Emit(new{id,result=true});return;}
+  if(method=="micTestStop"){micTest.Stop();wake.Resume();Emit(new{id,result=true});return;}
   // App changes Claude requested that widen its permissions: ask through the same approval card, without holding the gate.
   if(method=="confirmAction"){
    var c=msg.GetProperty("args");var title=(c.GetProperty("title").GetString()??"").Trim();var detail=c.TryGetProperty("detail",out var d)?d.GetString()??"":"";
@@ -94,6 +99,7 @@ class Program {
       LocalSettings.Current.Provider=name;
      }if(settings.TryGetProperty("screens",out var screens)){var scope=screens.GetString();if(scope is not ("all" or "cursor"))throw new Exception("Screens must be all or cursor.");LocalSettings.Current.ScreenScope=scope;}
      var restartWake=false;
+     if(settings.TryGetProperty("micGain",out var micGain)&&micGain.ValueKind==JsonValueKind.Number){var g=Math.Clamp(micGain.GetDouble(),0.5,8.0);if(Math.Abs(g-LocalSettings.Current.MicGain)>0.001){LocalSettings.Current.MicGain=g;wake.SetGain(g);micTest.SetGain(g);}}
      if(settings.TryGetProperty("wakeWord",out var wakeWord)&&wakeWord.ValueKind is JsonValueKind.True or JsonValueKind.False)LocalSettings.Current.WakeWord=wakeWord.GetBoolean();
      if(settings.TryGetProperty("speechLanguage",out var speechLanguage)){var lang=speechLanguage.GetString();if(lang is not ("auto" or "de" or "en"))throw new Exception("Speech language must be auto, de or en.");restartWake=lang!=LocalSettings.Current.SpeechLanguage;LocalSettings.Current.SpeechLanguage=lang;}
      if(settings.TryGetProperty("agentApproval",out var approval)){var mode=approval.GetString();if(mode is null||!AgentPolicy.Approvals.Contains(mode))throw new Exception("Unsupported approval mode.");LocalSettings.Current.AgentApproval=mode;}

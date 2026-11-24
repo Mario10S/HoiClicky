@@ -19,6 +19,8 @@ internal sealed class LocalSettings
     public bool WakeWord { get; set; }
     // Whisper language: "auto", "de" or "en".
     public string SpeechLanguage { get; set; } = "auto";
+    // Software microphone gain for all speech features, 0.5 to 8.
+    public double MicGain { get; set; } = 1.0;
     public string? Provider { get; set; }
     public string? Model { get; set; }
     public int TalkKey1 { get; set; } = 162;

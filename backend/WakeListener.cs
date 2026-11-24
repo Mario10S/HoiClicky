@@ -29,6 +29,7 @@ internal sealed class WakeListener:IDisposable {
    var start=new ProcessStartInfo(found.Value.Python){UseShellExecute=false,CreateNoWindow=true,RedirectStandardInput=true,RedirectStandardOutput=true,RedirectStandardError=true};
    start.ArgumentList.Add("-u");start.ArgumentList.Add(found.Value.Script);
    start.Environment["HOICLICKY_SPEECH_LANGUAGE"]=LocalSettings.Current.SpeechLanguage;
+   start.Environment["HOICLICKY_MIC_GAIN"]=MicTest.Gain(LocalSettings.Current.MicGain);
    var child=Process.Start(start);if(child is null){onEvent("error","Hands-free listening could not start.");return;}
    process=child;_=child.StandardError.ReadToEndAsync();
    _=Task.Run(async()=>{
@@ -40,6 +41,7 @@ internal sealed class WakeListener:IDisposable {
  void Send(string command){lock(sync){try{if(process is {HasExited:false}){process.StandardInput.WriteLine(command);process.StandardInput.Flush();}}catch{}}}
  public void Pause()=>Send("pause");
  public void Resume()=>Send("resume");
+ public void SetGain(double gain)=>Send("gain "+MicTest.Gain(gain));
  public void Stop(){
   Process? child;lock(sync){child=process;process=null;}
   if(child is null)return;
