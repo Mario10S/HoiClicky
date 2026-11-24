@@ -7,6 +7,32 @@ const PANEL={width:460,height:420,minWidth:340,minHeight:260,maxWidth:1100,maxHe
 const clamp=(value,min,max)=>Math.max(min,Math.min(max,value));
 function readStore(storePath){try{const value=JSON.parse(fs.readFileSync(storePath,'utf8'));return value&&typeof value==='object'?value:{};}catch{return {};}}
 function workArea(x,y,width,height){return screen.getDisplayNearestPoint({x:Math.round(x+width/2),y:Math.round(y+height/2)}).workArea;}
+// Where the island goes when it changes size. Pure, so it can be tested without Electron.
+// Growing: it grows away from the nearest screen edges, so an orb in the top-right corner opens towards the
+// bottom left instead of jumping to a centred spot. Shrinking back to the orb: it returns to where the orb was,
+// shifted by however far the open panel was moved meanwhile.
+function placeIsland({bounds:b,size,mode,next,area,home,opened}){
+ const clampTo=(x,y,w,h)=>{w=Math.min(w,area.width);h=Math.min(h,area.height);return {x:Math.round(clamp(x,area.x,area.x+area.width-w)),y:Math.round(clamp(y,area.y,area.y+area.height-h)),width:Math.round(w),height:Math.round(h)};};
+ const cx=b.x+b.width/2,cy=b.y+b.height/2;
+ if(mode==='orb'&&next!=='orb')home={cx,cy};
+ if(next==='orb'){
+  let x=cx,y=b.y+size.height/2;
+  if(home&&opened){
+   const dx=opened.alignX==='right'?(b.x+b.width)-(opened.x+opened.width):opened.alignX==='left'?b.x-opened.x:cx-(opened.x+opened.width/2);
+   const dy=opened.alignY==='bottom'?(b.y+b.height)-(opened.y+opened.height):b.y-opened.y;
+   x=home.cx+dx;y=home.cy+dy;
+  }
+  return {target:clampTo(x-size.width/2,y-size.height/2,size.width,size.height),home,opened:null};
+ }
+ const third=area.width/3;
+ const alignX=cx>area.x+2*third?'right':cx<area.x+third?'left':'center';
+ const alignY=cy>area.y+area.height/2?'bottom':'top';
+ const x=alignX==='right'?b.x+b.width-size.width:alignX==='left'?b.x:cx-size.width/2;
+ const y=alignY==='bottom'?b.y+b.height-size.height:b.y;
+ const target=clampTo(x,y,size.width,size.height);
+ // Keep the first opening's anchor while switching between pill and panel, so closing still finds home.
+ return {target,home,opened:mode==='orb'||!opened?{...target,alignX,alignY}:{...target,alignX:opened.alignX,alignY:opened.alignY}};
+}
 function fit(x,y,width,height){const area=workArea(x,y,width,height);width=Math.min(width,area.width);height=Math.min(height,area.height);return {x:Math.round(clamp(x,area.x,area.x+area.width-width)),y:Math.round(clamp(y,area.y,area.y+area.height-height)),width:Math.round(width),height:Math.round(height)};}
 // Where the orb starts: the remembered spot when it is still on a connected display, otherwise top centre.
 function initialIslandBounds(storePath){
@@ -15,7 +41,7 @@ function initialIslandBounds(storePath){
  const area=screen.getPrimaryDisplay().workArea;return {x:Math.round(area.x+(area.width-width)/2),y:area.y+10,width,height};
 }
 function attachIslandMotion(ipcMain,getWindow,storePath){
- const store=readStore(storePath);let mode='orb',gesture=null,saveTimer=null,reset=null,previous=null;
+ const store=readStore(storePath);let mode='orb',gesture=null,saveTimer=null,reset=null,previous=null,home=null,opened=null;
  function save(){clearTimeout(saveTimer);saveTimer=setTimeout(()=>{try{fs.writeFileSync(storePath,JSON.stringify(store));}catch{}},400);}
  function remember(bounds){store.centerX=Math.round(bounds.x+bounds.width/2);store.top=bounds.y;save();}
  function panelSize(){return {width:clamp(Number(store.panelWidth)||PANEL.width,PANEL.minWidth,PANEL.maxWidth),height:clamp(Number(store.panelHeight)||PANEL.height,PANEL.minHeight,PANEL.maxHeight)};}
@@ -23,8 +49,10 @@ function attachIslandMotion(ipcMain,getWindow,storePath){
  function layout(event,value){
   const win=valid(event);const next=value?.mode;if(!win||!['orb','pill','panel'].includes(next))return mode;
   const b=win.getBounds(),size=next==='panel'?panelSize():SIZES[next];
-  // Grow and shrink around the horizontal centre so the orb, pill and panel stay in the same place.
-  const target=fit(b.x+(b.width-size.width)/2,b.y,size.width,size.height);
+  if(next===mode)return mode; // nothing changes size, so nothing should move
+  const placed=placeIsland({bounds:b,size,mode,next,area:workArea(b.x,b.y,b.width,b.height),home,opened});
+  const target=placed.target;home=placed.home;opened=placed.opened;
+  if(next==='orb'){remember(target);}
   if(target.x!==b.x||target.y!==b.y||target.width!==b.width||target.height!==b.height)win.setBounds(target);
   mode=next;win.setAlwaysOnTop(true,'screen-saver');if(!win.isVisible())win.showInactive();return mode;
  }
@@ -50,4 +78,4 @@ function attachIslandMotion(ipcMain,getWindow,storePath){
  window.on('move',moved);
  return ()=>{clearTimeout(reset);clearTimeout(saveTimer);try{fs.writeFileSync(storePath,JSON.stringify(store));}catch{}window.removeListener('move',moved);};
 }
-module.exports={attachIslandMotion,initialIslandBounds};
+module.exports={attachIslandMotion,initialIslandBounds,placeIsland};
