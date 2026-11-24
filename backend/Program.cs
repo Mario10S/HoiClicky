@@ -20,6 +20,7 @@ class Program {
     wakeActive=true;Emit(new{eventName="hold",value=true});Emit(new{eventName="voice",kind="ready",value="Listening"});break;
    case "listening":if(wakeActive)Emit(new{eventName="voice",kind="ready",value});break;
    case "level":if(wakeActive)Emit(new{eventName="voice",kind="level",value});break;
+   case "partial":if(wakeActive)Emit(new{eventName="voice",kind="partial",value});break;
    case "loading":
     if(wakeActive){Emit(new{eventName="hold",value=false});Emit(new{eventName="voice",kind="loading",value});}
     else Emit(new{eventName="wakeState",state="loading",value});
