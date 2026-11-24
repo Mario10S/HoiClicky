@@ -76,6 +76,13 @@ class QuestionRecordingTests(unittest.TestCase):
         recorded = record_question(stream, pause_blocks=18, noise=0.002, initial=initial)
         self.assertEqual(len(recorded), 8 + 18, 'stopped after the pause, counting the silence already heard')
 
+    def test_reports_a_live_transcript_while_talking(self):
+        stream = iter(self.blocks(('talk', 25), ('quiet', 18)))
+        seen = []
+        record_question(stream, pause_blocks=18, noise=0.002, on_partial=lambda blocks: seen.append(len(blocks)))
+        self.assertTrue(len(seen) >= 2, 'about once a second while speaking')
+        self.assertTrue(all(n % 10 == 0 for n in seen))
+
     def test_nothing_said_after_the_wake_word(self):
         self.assertIsNone(record_question(iter(self.blocks(('quiet', 80))), pause_blocks=18, noise=0.002, wait_blocks=60))
 

@@ -103,7 +103,8 @@ def pause_from_env():
         return 1.8
 
 
-def record_question(blocks, pause_blocks, noise, initial=None, wait_blocks=60, max_blocks=600, on_level=None):
+def record_question(blocks, pause_blocks, noise, initial=None, wait_blocks=60, max_blocks=600, on_level=None,
+                    on_partial=None, partial_every=10):
     """Keep recording until the user pauses for pause_blocks; returns the recorded blocks, or None if nothing was said.
     initial: blocks already heard together with the wake word ("Jarvis, how ..."); recording carries on after them,
     so a short hesitation in the middle of the question does not cut it off."""
@@ -131,6 +132,9 @@ def record_question(blocks, pause_blocks, noise, initial=None, wait_blocks=60, m
         done = command.feed(block, rms)
         if done is not None:
             return done
+        # While the user is talking, hand over what was recorded so far about once a second (live transcript).
+        if on_partial and command.active and command.quiet == 0 and len(command.blocks) % partial_every == 0:
+            on_partial(command.blocks)
     return None
 
 
@@ -269,8 +273,15 @@ def main():
             # ("Jarvis, how ..."), keep listening after that first segment instead of cutting it off.
             emit('listening', 'Listening')
             one_breath = len(remainder.split()) >= 1
+            def live_transcript(blocks_so_far):
+                # Quick tiny-model read of the last ~10 s, so the floating window can show what was heard while talking.
+                heard_now = transcribe(wake_model, np.concatenate(blocks_so_far[-100:]), initial_prompt=PROMPT)
+                if one_breath:
+                    heard_now = match_wake(heard_now)[1] or heard_now
+                if heard_now:
+                    emit('partial', heard_now)
             recorded = record_question(stream, pause_blocks, listener.noise, initial=segment if one_breath else None,
-                on_level=lambda rms: emit('level', min(100, int(rms * 700))))
+                on_level=lambda rms: emit('level', min(100, int(rms * 700))), on_partial=live_transcript)
             if not recorded:
                 emit('nothing', 'No question heard')
                 continue
