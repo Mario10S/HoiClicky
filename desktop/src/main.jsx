@@ -66,11 +66,14 @@ function App(){
  const [voiceConfig,setVoiceConfig]=useState(()=>{try{return JSON.parse(localStorage.getItem('voiceConfig'))||{provider:'piper',voiceId:'de_DE-thorsten-high'};}catch{return {provider:'piper',voiceId:'de_DE-thorsten-high'};}}),[voiceVoices,setVoiceVoices]=useState([]),[voiceKeyState,setVoiceKeyState]=useState(''),[voiceKey,setVoiceKey]=useState(''),[voiceError,setVoiceError]=useState('');const speechAudio=useRef(null);
  useEffect(()=>{localStorage.setItem('voiceConfig',JSON.stringify(voiceConfig));},[voiceConfig]);useEffect(()=>{if(!onIsland)api.ttsKey().then(setVoiceKeyState).catch(()=>{});},[]);
  function stopSpeech(){speechSynthesis.cancel();speechAudio.current?.pause();speechAudio.current=null;}
- async function speakAnswer(text){stopSpeech();setPhase('Speaking');try{if(voiceConfig.provider==='elevenlabs'){const data=await api.ttsSpeak({text,voiceId:voiceConfig.voiceId});const audio=new Audio('data:audio/mpeg;base64,'+data);audio.volume=voiceVolume(voiceConfig);speechAudio.current=audio;audio.onended=()=>setPhase('Answered');await audio.play();}else if(voiceConfig.provider==='piper'){const data=await api.piperSpeak({text,voice:voiceConfig.voiceId||'de_DE-thorsten-high'});const audio=new Audio('data:audio/wav;base64,'+data);audio.volume=voiceVolume(voiceConfig);speechAudio.current=audio;audio.onended=()=>setPhase('Answered');await audio.play();}else{const utterance=new SpeechSynthesisUtterance(text);utterance.volume=voiceVolume(voiceConfig);utterance.onend=utterance.onerror=()=>setPhase('Answered');speechSynthesis.speak(utterance);}}catch(e){setVoiceError(e.message);setPhase('Answered');}}
+ const isSpeaking=()=>!!speechAudio.current||speechSynthesis.speaking;
+ function shutUp(){stopSpeech();setPhase(p=>p==='Speaking'?'Answered':p);}
+ async function speakAnswer(text){stopSpeech();setPhase('Speaking');try{if(voiceConfig.provider==='elevenlabs'){const data=await api.ttsSpeak({text,voiceId:voiceConfig.voiceId});const audio=new Audio('data:audio/mpeg;base64,'+data);audio.volume=voiceVolume(voiceConfig);speechAudio.current=audio;audio.onended=()=>{if(speechAudio.current===audio)speechAudio.current=null;setPhase('Answered');};await audio.play();}else if(voiceConfig.provider==='piper'){const data=await api.piperSpeak({text,voice:voiceConfig.voiceId||'de_DE-thorsten-high'});const audio=new Audio('data:audio/wav;base64,'+data);audio.volume=voiceVolume(voiceConfig);speechAudio.current=audio;audio.onended=()=>{if(speechAudio.current===audio)speechAudio.current=null;setPhase('Answered');};await audio.play();}else{const utterance=new SpeechSynthesisUtterance(text);utterance.volume=voiceVolume(voiceConfig);utterance.onend=utterance.onerror=()=>setPhase('Answered');speechSynthesis.speak(utterance);}}catch(e){setVoiceError(e.message);setPhase('Answered');}}
  async function loadVoiceOptions(){try{const voices=await api.ttsVoices();setVoiceVoices(voices);setVoiceConfig(c=>({...c,voiceId:c.voiceId||voices[0]?.id||''}));setVoiceError('');}catch(e){setVoiceError(e.message);}}
 
  const [approvals,setApprovals]=useState([]),[agentRunning,setAgentRunning]=useState(false),[agentOn,setAgentOnState]=useState(()=>{try{return localStorage.getItem('hoi.agent')==='1';}catch{return false;}});
  const setAgentOn=value=>{setAgentOnState(value);try{localStorage.setItem('hoi.agent',value?'1':'0');}catch{}};
+ const speechToggleRef=useRef(null),lastAnswerRef=useRef('');
  const autoVoice=useRef(false),voiceFailed=useRef(false),sendRef=useRef(null),sending=useRef(false);
  const transcript=useRef(''),voiceRef=useRef(false),end=useRef(null);
  async function refresh(){const s=await api.status();setStatus(s);if(s.provider==='ollama'||(s.provider==='chatgpt'&&s.connected)||(s.provider==='claude'&&s.claude?.loggedIn)){const m=await api.models();setModels(m);setStatus(v=>({...v,model:m.some(x=>x.Slug===v.model)?v.model:m[0]?.Slug||''}));}}
@@ -80,6 +83,7 @@ function App(){
   if(event.eventName==='answer')setMessages(m=>m.map((x,i)=>i===m.length-1?{...x,text:stripAppMarkers(event.value)}:x));
   if(event.eventName==='error')setError(event.value);
   if(event.eventName==='islandAsk'&&!onIsland)sendRef.current?.(event.text);
+  if(event.eventName==='islandSpeech'&&!onIsland)speechToggleRef.current?.(event.action);
   if(event.eventName==='approval')setApprovals(items=>items.some(a=>a.id===event.id)?items:[...items,event]);
   if(event.eventName==='wakeState')setWakeState({state:event.state,value:event.value||''});
   if(event.eventName==='approvalDone')setApprovals(items=>items.filter(a=>a.id!==event.id));
@@ -101,6 +105,7 @@ function App(){
  const {text:clean,actions}=parseAppCommands(answer);if(actions.length&&agentProviders.includes(status.provider))setPendingActions(actions);
  setMessages(m=>m.map((x,i)=>i===m.length-1?{...x,text:clean}:x));setPhase('Answered');playCompletion(api,sound).catch(e=>setSoundError('Could not play completion sound: '+e.message));if(read){const spoken=speechText(clean);if(spoken)speakAnswer(spoken);}}catch(e){setError(e.message);setPhase('Request stopped');}finally{sending.current=false;setBusy(false);setAgentRunning(false);if(retry)setTimeout(()=>sendRef.current?.(retry,{agent:true,retry:true}),0);}}
  sendRef.current=send;
+ speechToggleRef.current=action=>{if(action==='stop'||isSpeaking()||phase==='Speaking'){shutUp();return;}const spoken=speechText(lastAnswerRef.current);if(spoken)speakAnswer(spoken);};
  // App actions Claude requested run after the answer is in, so chat switching and saving see the final messages.
  const [pendingActions,setPendingActions]=useState(null);
  useEffect(()=>{if(onIsland||busy||!pendingActions)return;const actions=pendingActions;setPendingActions(null);runAppActions(actions).catch(e=>setError(e.message));},[pendingActions,busy]);
@@ -113,9 +118,9 @@ function App(){
    if(change.type==='setting')patch={...(patch||{}),...change.patch,...(change.patch.agent?{agent:{...status.agent,...(patch?.agent||{}),...change.patch.agent}}:{})};
    else if(change.type==='sound')soundPatch={...(soundPatch||{}),...change.patch};
    else if(change.type==='voice'){setVoiceConfig(c=>({...c,...change.patch}));if(speechAudio.current&&'volume' in change.patch)speechAudio.current.volume=change.patch.volume;}
-   else if(change.type==='read')setRead(change.on);
+   else if(change.type==='read'){setRead(change.on);if(!change.on)shutUp();}
    else if(change.type==='agent')setAgentOn(change.on);
-   else if(change.type==='stop_speaking')speechSynthesis.cancel();
+   else if(change.type==='stop_speaking')shutUp();
    else if(change.type==='search')setChatSearch(change.query);
    else if(change.type==='page'){setPage(change.page);api.window('open').catch(()=>{});}
    else last=change;
@@ -134,6 +139,7 @@ function App(){
   else{const chat=chats.find(c=>c.id===last.id);if(chat){setChatId(chat.id);setMessages(chat.messages);}}
  }
  const lastAnswer=messages.filter(m=>m.role==='hoi').at(-1)?.text||'';
+ lastAnswerRef.current=lastAnswer;
  useEffect(()=>{if(!onIsland)api.presentation({phase,answer:listening||/transcrib|opening microphone|loading local/i.test(phase)?'':lastAnswer,question:messages.filter(m=>m.role==='you').at(-1)?.text||'',model:models.find(m=>m.Slug===status.model)?.Name||'',talk:talkLabel(status.key1,status.key2),busy,agentRunning,listening,error}).catch(()=>{});},[phase,lastAnswer,busy,agentRunning,listening,error,messages,models,status.model,status.key1,status.key2]);
 
  if(onIsland)return <FloatingAssistant phase={phase} level={level}/>;
@@ -194,7 +200,7 @@ function App(){
     <SettingRow title="Speech language" description="The language you speak to HoiClicky. Auto detects it each time."><Segmented label="Speech language" value={status.speechLanguage||'auto'} onChange={speechLanguage=>setting({speechLanguage})} options={[['auto','Auto'],['de','Deutsch'],['en','English']]}/></SettingRow>
    </SettingsGroup>
    <SettingsGroup title="Spoken answers" description="HoiClicky can read every answer aloud.">
-    <SettingRow title="Speak answers" description="Read each reply aloud automatically."><Toggle label="Speak answers" checked={read} onChange={setRead}/></SettingRow>
+    <SettingRow title="Speak answers" description="Read each reply aloud automatically."><Toggle label="Speak answers" checked={read} onChange={on=>{setRead(on);if(!on)shutUp();}}/></SettingRow>
     <SettingRow title="Voice volume"><Range label="Voice volume" value={voiceVolume(voiceConfig)} onChange={volume=>{setVoiceConfig({...voiceConfig,volume});if(speechAudio.current)speechAudio.current.volume=volume;}}/></SettingRow>
    </SettingsGroup>
    <SettingsGroup title="Answer voice" description="Piper voices are free and run on this PC. ElevenLabs sends only the answer text and needs its own account; usage may be paid.">
@@ -306,12 +312,13 @@ function Wave({level,active}){return <div className={'hc-wave'+(active?' active'
 
 function FloatingAssistant({level}){
  const [view,setView]=useState({phase:'Ready',answer:'',question:'',model:'',talk:'',busy:false,agentRunning:false,listening:false,error:''});
- const [mode,setMode]=useState('orb'),[logo,setLogo]=useState({x:0,y:0,tilt:0}),[draft,setDraft]=useState(''),[copied,setCopied]=useState(false),[speaking,setSpeaking]=useState(false),[askError,setAskError]=useState('');
+ const [mode,setMode]=useState('orb'),[logo,setLogo]=useState({x:0,y:0,tilt:0}),[draft,setDraft]=useState(''),[copied,setCopied]=useState(false),[askError,setAskError]=useState('');
  const [pinned,setPinned]=useState(()=>{try{return localStorage.getItem('hoi.island.pinned')==='1';}catch{return false;}});
  const previous=useRef(view),hovering=useRef(false),typing=useRef(false),body=useRef(null),input=useRef(null);
  const [approvals,setApprovals]=useState([]);
  useEffect(()=>api.events(event=>{if(event.eventName==='logo-motion')setLogo(event);if(event.eventName==='presentation')setView(event);if(event.eventName==='approval'){setApprovals(items=>items.some(a=>a.id===event.id)?items:[...items,event]);setMode('panel');}if(event.eventName==='approvalDone')setApprovals(items=>items.filter(a=>a.id!==event.id));}),[]);
  const transcribing=/transcrib|loading local/i.test(view.phase);
+ const speaking=view.phase==='Speaking';
  const active=view.busy||view.listening||transcribing;
  // Open the panel when an answer or error arrives; show the pill while listening and thinking.
  useEffect(()=>{
@@ -325,16 +332,15 @@ function FloatingAssistant({level}){
  // Unpinned panels fold back into the orb after a quiet half minute; hovering or typing keeps them open.
  useEffect(()=>{if(mode!=='panel'||pinned||active)return;const timer=setInterval(()=>{if(!hovering.current&&!typing.current&&!draft)setMode('orb');},30000);return()=>clearInterval(timer);},[mode,pinned,active,view.answer,draft]);
  useEffect(()=>{const el=body.current;if(el&&el.scrollHeight-el.scrollTop-el.clientHeight<120)el.scrollTop=el.scrollHeight;},[view.answer]);
- useEffect(()=>()=>speechSynthesis.cancel(),[]);
  const open=()=>setMode('panel');
  const orbGesture=useIslandGesture('move',open),pillGesture=useIslandGesture('move',open);
- const state=view.error?'error':transcribing?'transcribing':view.listening?'listening':view.busy?(view.answer?'answering':'thinking'):speaking||view.phase==='Speaking'?'speaking':view.answer?'answered':'idle';
+ const state=view.error?'error':transcribing?'transcribing':view.listening?'listening':view.busy?(view.answer?'answering':'thinking'):speaking?'speaking':view.answer?'answered':'idle';
  const label=approvals.length?'Waiting for you':{error:'Needs attention',transcribing:'Transcribing',listening:'Listening',thinking:view.phase||'Thinking',answering:'Answering',speaking:'Speaking',answered:'Answer',idle:'Ready'}[state];
  const talk=view.talk||'your talk key';
  function stopAgent(event){event?.stopPropagation();api.agentStop().catch(err=>setAskError('Could not stop agent: '+err.message));}
  async function ask(e){e?.preventDefault();const text=draft.trim();if(!text||view.busy||view.listening)return;setAskError('');try{await api.islandAsk(text);setDraft('');}catch(err){setAskError(err.message);}}
  function copy(){navigator.clipboard.writeText(view.answer).then(()=>{setCopied(true);setTimeout(()=>setCopied(false),1600);}).catch(err=>setAskError('Could not copy: '+err.message));}
- function readAloud(){if(speaking){speechSynthesis.cancel();setSpeaking(false);return;}const utterance=new SpeechSynthesisUtterance(speechText(view.answer)||plainText(view.answer));try{utterance.volume=voiceVolume(JSON.parse(localStorage.getItem('voiceConfig')));}catch{}utterance.onend=utterance.onerror=()=>setSpeaking(false);speechSynthesis.cancel();speechSynthesis.speak(utterance);setSpeaking(true);}
+ function readAloud(){api.islandSpeech(speaking?'stop':'toggle').catch(err=>setAskError(err.message));}
  const orb=<span className="hc-core" style={{transform:`translate(${logo.x}px,${logo.y}px) rotate(${logo.tilt}deg)`}}><Sparkles size={mode==='orb'?20:15}/></span>;
  const rimLevel={'--hc-level':Math.min(1,level/60).toFixed(2)};
 
