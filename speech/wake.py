@@ -95,6 +95,45 @@ def match_wake(text, pattern=None):
     return True, clean[found.end():].strip()
 
 
+def pause_from_env():
+    """Seconds of silence that end a spoken question (Settings: pause before sending)."""
+    try:
+        return min(5.0, max(0.8, float(os.environ.get('HOICLICKY_SPEECH_PAUSE', '1.8'))))
+    except ValueError:
+        return 1.8
+
+
+def record_question(blocks, pause_blocks, noise, initial=None, wait_blocks=60, max_blocks=600, on_level=None):
+    """Keep recording until the user pauses for pause_blocks; returns the recorded blocks, or None if nothing was said.
+    initial: blocks already heard together with the wake word ("Jarvis, how ..."); recording carries on after them,
+    so a short hesitation in the middle of the question does not cut it off."""
+    import numpy as np
+    rms_of = lambda block: float(np.sqrt(np.mean(block * block)))
+    command = Segmenter(end_silence_blocks=pause_blocks, max_blocks=max_blocks, preroll_blocks=2)
+    command.noise = noise
+    started, waited = False, 0
+    if initial:
+        quiet = 0
+        for block in reversed(initial):
+            if rms_of(block) > command.threshold():
+                break
+            quiet += 1
+        command.active, command.blocks, command.quiet, started = True, list(initial), quiet, True
+    for block in blocks:
+        rms = rms_of(block)
+        if on_level:
+            on_level(rms)
+        if not started:
+            started = rms > command.threshold()
+            waited += 1
+            if not started and waited > wait_blocks:
+                return None  # nothing said after the wake word
+        done = command.feed(block, rms)
+        if done is not None:
+            return done
+    return None
+
+
 def hear_wake(model, audio, languages, pattern=None, prompt=None):
     """Check one speech segment for a wake word. Returns (heard, found, remainder).
     The spelling hint helps Whisper write the names right, but for some voices it makes Whisper
@@ -162,6 +201,7 @@ def main():
 
     paused = threading.Event()
     quit_now = threading.Event()
+    pause_blocks = max(8, int(round(pause_from_env() * RATE / BLOCK)))
     gain = [gain_from_env()]
 
     def commands():
@@ -225,35 +265,20 @@ def main():
             emit('wake', heard)
             if main_model is None:
                 main_model = WhisperModel(str(MAIN_MODEL), device='cpu', compute_type='int8', local_files_only=True)
-            if len(remainder.split()) >= 2:
-                # The question came in the same breath: re-read the whole segment with the better model.
-                emit('loading', 'Transcribing locally')
-                full = transcribe(main_model, audio, beam_size=5, initial_prompt=PROMPT)
-                _, question = match_wake(full)
-                question = question or remainder
-                emit('text', question)
-                continue
-            # Record the question that follows the wake word, until the user pauses.
+            # Record the question until the user really pauses. If it already started together with the wake word
+            # ("Jarvis, how ..."), keep listening after that first segment instead of cutting it off.
             emit('listening', 'Listening')
-            command = Segmenter(end_silence_blocks=12, max_blocks=250, preroll_blocks=2)
-            command.noise = listener.noise
-            started, waited, recorded = False, 0, None
-            for next_block in stream:
-                rms = float(np.sqrt(np.mean(next_block * next_block)))
-                emit('level', min(100, int(rms * 700)))
-                if not started:
-                    started = rms > command.threshold()
-                    waited += 1
-                    if not started and waited > 50:
-                        break  # nothing said within 5 seconds
-                recorded = command.feed(next_block, rms)
-                if recorded is not None:
-                    break
+            one_breath = len(remainder.split()) >= 1
+            recorded = record_question(stream, pause_blocks, listener.noise, initial=segment if one_breath else None,
+                on_level=lambda rms: emit('level', min(100, int(rms * 700))))
             if not recorded:
                 emit('nothing', 'No question heard')
                 continue
             emit('loading', 'Transcribing locally')
-            text = transcribe(main_model, np.concatenate(recorded), beam_size=5, vad_filter=True)
+            text = transcribe(main_model, np.concatenate(recorded), beam_size=5, vad_filter=True, initial_prompt=PROMPT)
+            if one_breath:
+                _, question = match_wake(text)
+                text = question or remainder
             emit('text' if text else 'nothing', text or 'No question heard')
 
 
