@@ -38,8 +38,9 @@ test('changes that widen what the agent may do need confirmation',()=>{
  const wakeOn=planAppAction({action:'set',setting:'wake_word',value:true},ctx);
  assert.equal(wakeOn.sensitive,true);assert.deepEqual(wakeOn.change.patch,{wakeWord:true,microphone:true});
  assert.equal(planAppAction({action:'set',setting:'wake_word',value:false},{...ctx,status:{...ctx.status,wakeWord:true}}).sensitive,false);
- assert.deepEqual(planAppAction({action:'set',setting:'speech_language',value:'de'},ctx).change,{type:'setting',patch:{speechLanguage:'de'}});
- assert.equal(planAppAction({action:'set',setting:'speech_language',value:'fr'},ctx).ok,false);
+ assert.deepEqual(planAppAction({action:'set',setting:'speech_languages',value:['de','en','de']},ctx).change,{type:'setting',patch:{speechLanguages:['de','en']}});
+ assert.equal(planAppAction({action:'set',setting:'speech_languages',value:[]},ctx).ok,false);
+ assert.equal(planAppAction({action:'set',setting:'speech_languages',value:['klingon']},ctx).ok,false);
  assert.deepEqual(planAppAction({action:'set',setting:'mic_gain',value:2},ctx).change,{type:'setting',patch:{micGain:2}});
  assert.equal(planAppAction({action:'set',setting:'mic_gain',value:9},ctx).ok,false);
  assert.equal(planAppAction({action:'set',setting:'screens',value:'all'},{...ctx,status:{...ctx.status,screens:'cursor'}}).sensitive,true);

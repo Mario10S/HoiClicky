@@ -57,7 +57,7 @@ function planSetting(setting,value,ctx,status,ok,fail){
   case 'screens':return value==='all'||value==='cursor'?ok(value==='all'?'Screen questions → all monitors':'Screen questions → monitor under the pointer',{type:'setting',patch:{screens:value}},value==='all'&&status.screens==='cursor'):fail('Screens must be all or cursor.');
   case 'mic_gain':{const gain=Number(value);return Number.isFinite(gain)&&gain>=0.5&&gain<=8?ok('Microphone volume → '+Math.round(gain*100)+'%',{type:'setting',patch:{micGain:gain}}):fail('Microphone volume must be between 0.5 and 8.');}
   case 'wake_word':{if(!bool(value))return fail('Wake word needs true or false.');return ok('“Hey Clicky” '+onOff(value),{type:'setting',patch:value?{wakeWord:true,microphone:true}:{wakeWord:false}},value&&!status.wakeWord);}
-  case 'speech_language':return ['auto','de','en'].includes(value)?ok('Speech language → '+({auto:'auto',de:'German',en:'English'})[value],{type:'setting',patch:{speechLanguage:value}}):fail('Speech language must be auto, de or en.');
+  case 'speech_languages':{const known=['de','en','fr','es','it','pt','nl','pl','tr','sq','hr','sr','bs','ru','uk','ar'];if(!Array.isArray(value)||!value.length||value.some(c=>!known.includes(c)))return fail('Speech languages must be a non-empty list of language codes like de and en.');const langs=[...new Set(value)];return ok('Speech languages → '+langs.join(', '),{type:'setting',patch:{speechLanguages:langs}});}
   case 'microphone':return bool(value)?ok('Microphone '+onOff(value),{type:'setting',patch:{microphone:value}},value&&!status.microphone):fail('Microphone needs true or false.');
   case 'speak_answers':return bool(value)?ok('Speak answers '+onOff(value),{type:'read',on:value}):fail('Speak answers needs true or false.');
   case 'talk_keys':{
@@ -94,7 +94,7 @@ export function appContext(ctx){
  const s=ctx.status||{};
  return {
   page:ctx.page,provider:s.provider,model:s.model,models:(ctx.models||[]).slice(0,30).map(m=>({slug:m.Slug,name:m.Name})),
-  screen:!!s.screen,screens:s.screens||'all',microphone:!!s.microphone,wake_word:!!s.wakeWord,speech_language:s.speechLanguage||'auto',mic_gain:Number(s.micGain)||1,speak_answers:!!ctx.read,
+  screen:!!s.screen,screens:s.screens||'all',microphone:!!s.microphone,wake_word:!!s.wakeWord,speech_languages:s.speechLanguages||['de','en'],mic_gain:Number(s.micGain)||1,speak_answers:!!ctx.read,
   talk_keys:{key1:s.key1,key2:s.key2??0,choices:Object.fromEntries((ctx.talkKeys||[]).map(([code,name])=>[name,code]))},
   sound:{mode:ctx.sound?.mode,volume:ctx.sound?.volume,custom_mp3:!!ctx.sound?.name},voice_volume:ctx.voiceVolume??1,
   agent:{on:!!ctx.agentOn,approval:s.agent?.approval,tools:s.agent?.tools,workspace_chosen:!!s.agent?.workspace},
