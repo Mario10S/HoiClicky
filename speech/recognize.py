@@ -29,7 +29,7 @@ def main():
     if len(audio) < 4000 or float(np.sqrt(np.mean(audio * audio))) < .001:
         emit('error', 'No clear speech detected. Check the selected Windows microphone.')
         return
-    language = os.environ.get('HOICLICKY_SPEECH_LANGUAGE', 'en')
+    language = os.environ.get('HOICLICKY_SPEECH_LANGUAGE', 'auto')
     from faster_whisper import WhisperModel
     model = WhisperModel(str(model_dir), device='cpu', compute_type='int8', local_files_only=True)
     segments, _ = model.transcribe(audio, language=None if language == 'auto' else language,

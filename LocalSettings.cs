@@ -15,6 +15,10 @@ internal sealed class LocalSettings
     // "all" captures every monitor for screen questions, "cursor" only the monitor under the mouse pointer.
     public string ScreenScope { get; set; } = "all";
     public bool AllowMicrophone { get; set; }
+    // Hands-free "Hey Clicky" listening; off until the user turns it on.
+    public bool WakeWord { get; set; }
+    // Whisper language: "auto", "de" or "en".
+    public string SpeechLanguage { get; set; } = "auto";
     public string? Provider { get; set; }
     public string? Model { get; set; }
     public int TalkKey1 { get; set; } = 162;
