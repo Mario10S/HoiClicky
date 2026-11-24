@@ -65,11 +65,13 @@ app.whenReady().then(()=>{
  ipcMain.handle('island-speech',(event,action)=>{if(event.sender!==island?.webContents)throw Error('Invalid sender');if(!['toggle','stop'].includes(action))throw Error('Invalid speech action');main.webContents.send('event',{eventName:'islandSpeech',action});});
  ipcMain.handle('mic-test',(event,data)=>{if(event.sender!==main.webContents)throw Error('Invalid sender');if(data?.action==='stop')return call('micTestStop');if(data?.action!=='start')throw Error('Invalid microphone test action');return call('micTestStart',{monitor:!!data.monitor});});
  // Global hotkey that switches hands-free listening on and off; the chat window owns the setting.
- const wakeHotkeys=['CommandOrControl+Alt+J','CommandOrControl+Shift+J','CommandOrControl+Alt+H','CommandOrControl+Alt+K','Alt+Shift+J'];
+ // Any recorded shortcut with Ctrl, Alt or Win (function keys may stand alone), in Electron accelerator form.
+ const hotkeyPattern=/^(?:(?:CommandOrControl|Alt|Shift|Super)\+){0,4}(?:[A-Z0-9]|F(?:[1-9]|1[0-9]|2[0-4])|num[0-9]|Space|Up|Down|Left|Right|Home|End|PageUp|PageDown|Insert|Delete|[`\-=\[\]\\;',./])$/;
+ const validHotkey=value=>typeof value==='string'&&hotkeyPattern.test(value)&&(/(^|\+)F\d+$/.test(value)||/(CommandOrControl|Alt|Super)\+/.test(value));
  let wakeHotkey=null;
  ipcMain.handle('wake-hotkey',(event,accelerator)=>{
   if(event.sender!==main.webContents)throw Error('Invalid sender');
-  if(accelerator&&!wakeHotkeys.includes(accelerator))throw Error('Unsupported hotkey');
+  if(accelerator&&!validHotkey(accelerator))throw Error('Use Ctrl, Alt or Win with a key, or a function key.');
   if(wakeHotkey){globalShortcut.unregister(wakeHotkey);wakeHotkey=null;}
   if(!accelerator)return true;
   if(!globalShortcut.register(accelerator,()=>main.webContents.send('event',{eventName:'toggleWake'})))throw Error('That hotkey is already used by another app. Pick a different one.');
