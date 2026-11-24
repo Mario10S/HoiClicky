@@ -14,9 +14,15 @@ def main():
     stop = threading.Event()
     threading.Thread(target=lambda: (sys.stdin.readline(), stop.set()), daemon=True).start()
     chunks = []
+    try:
+        gain = min(8.0, max(0.5, float(os.environ.get('HOICLICKY_MIC_GAIN', '1'))))
+    except ValueError:
+        gain = 1.0
     def callback(data, frames, time, status):
-        chunks.append(data[:, 0].copy())
-        emit('level', min(100, int(np.sqrt(np.mean(data * data)) * 700)))
+        # Software microphone gain from Settings, clipped so loud speech does not distort.
+        block = (data[:, 0] * gain).clip(-1.0, 1.0)
+        chunks.append(block)
+        emit('level', min(100, int(np.sqrt(np.mean(block * block)) * 700)))
     if stop.is_set():
         return
     with sd.InputStream(samplerate=16000, channels=1, dtype='float32', blocksize=1600, callback=callback):

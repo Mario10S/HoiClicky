@@ -5,7 +5,7 @@ segments are checked locally with a tiny Whisper model, and only after the wake 
 following question recorded and transcribed. Nothing is written to disk or sent anywhere.
 
 stdout: base64 event stream like recognize.py (ready, wake, level, loading, text, nothing, error).
-stdin: "pause", "resume" or "quit".
+stdin: "pause", "resume", "gain <factor>" or "quit".
 """
 import base64, os, re, sys, threading, time
 from pathlib import Path
@@ -20,11 +20,26 @@ PROMPT = 'Clicky'
 
 GREETING = r'(?:hey|hei|hej|he|hi|hai|hay|hoi|hoy|ahoi|oy|oi|heu|ey|eh|hallo|hello|ok(?:ay)?)'
 NAME = r'(?:[ckg]l?[iyeu]+c?k+[iyeu]*|[ckg]l[iy]k+[iy]?|[ckg]li[ck]+(?:ie|ey|i|y|e)?|clicky|klicky|klicki)'
-WAKE = re.compile(r'\b' + GREETING + r'\s*' + NAME + r'\b|\bhoi\s*clicky\b|\bheyclicky\b|\bhoiclicky\b', re.IGNORECASE)
+# The name on its own also counts when it opens the sentence, in case the greeting gets lost.
+# It must end in an "ee" sound so ordinary words like "click" or "klicke" never match.
+NAME_ALONE = r'(?:[ckg]l[iy]+c?k+(?:y|i|ie|ey)|cliquey|klicky|klicki|clicky)'
+WAKE = re.compile(r'\b' + GREETING + r'\s*' + NAME + r'\b|\bhoi\s*clicky\b|\bheyclicky\b|\bhoiclicky\b|^(?:a |the |oh )?' + NAME_ALONE + r'\b', re.IGNORECASE)
 
 
 def emit(kind, value=''):
     print(kind + ':' + base64.b64encode(str(value).encode('utf-8')).decode('ascii'), flush=True)
+
+
+def gain_from_env():
+    try:
+        return min(8.0, max(0.5, float(os.environ.get('HOICLICKY_MIC_GAIN', '1'))))
+    except ValueError:
+        return 1.0
+
+
+def amplify(block, gain):
+    """Software microphone gain, clipped so loud speech does not wrap around."""
+    return block if gain == 1.0 else (block * gain).clip(-1.0, 1.0)
 
 
 def normalize(text):
@@ -54,7 +69,7 @@ class Segmenter:
         self.blocks, self.quiet, self.active = [], 0, False
 
     def threshold(self):
-        return max(0.012, self.noise * 3.5)
+        return max(0.008, self.noise * 3.0)
 
     def feed(self, block, rms):
         """Feed one block; returns the finished segment (list of blocks) or None."""
@@ -92,6 +107,7 @@ def main():
 
     paused = threading.Event()
     quit_now = threading.Event()
+    gain = [gain_from_env()]
 
     def commands():
         for line in sys.stdin:
@@ -100,6 +116,11 @@ def main():
                 paused.set()
             elif word == 'resume':
                 paused.clear()
+            elif word.startswith('gain '):
+                try:
+                    gain[0] = min(8.0, max(0.5, float(word.split()[1])))
+                except ValueError:
+                    pass
             elif word == 'quit':
                 quit_now.set()
                 return
@@ -110,7 +131,7 @@ def main():
 
     def callback(data, frames, time_info, status):
         with lock:
-            queue.append(data[:, 0].copy())
+            queue.append(amplify(data[:, 0].copy(), gain[0]))
 
     def blocks():
         while not quit_now.is_set():

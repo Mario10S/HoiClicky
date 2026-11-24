@@ -4,7 +4,7 @@ Run: speech\\.venv\\Scripts\\python.exe -m unittest discover -s tests/Speech
 import sys, unittest
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'speech'))
-from wake import match_wake, Segmenter
+from wake import match_wake, Segmenter, amplify
 
 
 class WakeWordTests(unittest.TestCase):
@@ -16,9 +16,24 @@ class WakeWordTests(unittest.TestCase):
         self.assertEqual(match_wake('Hey Clicky, was ist auf meinem Bildschirm?'), (True, 'was ist auf meinem bildschirm'))
         self.assertEqual(match_wake('Hoi Clicky')[1], '')
 
+    def test_name_alone_counts_at_the_start(self):
+        for heard in ['Clicky, wie spät ist es?', 'Klicki', 'Clicky!', 'Oh Clicky']:
+            self.assertTrue(match_wake(heard)[0], heard)
+        self.assertEqual(match_wake('Clicky wie spät ist es')[1], 'wie spät ist es')
+        for heard in ['Klicke hier', 'Click the button', 'Ich mag Clicky nicht']:
+            self.assertFalse(match_wake(heard)[0], heard)
+
     def test_ignores_ordinary_speech(self):
         for heard in ['Ich klicke hier drauf', 'hey wie geht es dir', 'click the button', 'Das ist ein Klick', 'Thanks for watching']:
             self.assertFalse(match_wake(heard)[0], heard)
+
+
+class GainTests(unittest.TestCase):
+    def test_amplifies_and_clips(self):
+        import numpy as np
+        block = np.array([0.1, -0.2, 0.6], dtype=np.float32)
+        self.assertTrue(np.allclose(amplify(block, 2.0), [0.2, -0.4, 1.0]))
+        self.assertIs(amplify(block, 1.0), block)
 
 
 class SegmenterTests(unittest.TestCase):
