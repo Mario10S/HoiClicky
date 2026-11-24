@@ -15,7 +15,7 @@ test('installs piper-tts when it is missing, then downloads the voice',async()=>
 });
 
 test('offers the British voices',async()=>{
- for(const voice of ['en_GB-alan-medium','en_GB-northern_english_male-medium']){
+ for(const voice of ['en_GB-alan-medium','en_GB-northern_english_male-medium','de_DE-karlsson-low','de_DE-pavoque-low','de_DE-kerstin-medium','de_DE-ramona-low']){
   const {run,calls}=fake({check:{code:0,output:''},'piper.download_voices':{code:0,output:''}});
   assert.equal(await installVoice(voice,'C:/voices',run),true);
   assert.equal(calls.at(-1)[2],voice);

@@ -1,7 +1,8 @@
 // Local Piper voices: installs the piper-tts Python package on first use, downloads voice models and renders speech.
 const {spawn}=require('node:child_process');
-// Free local voices offered in Settings. Alan and Northern English male are calm British voices.
-const VOICES=['de_DE-thorsten-high','en_US-lessac-medium','en_GB-alan-medium','en_GB-northern_english_male-medium'];
+// Free local voices offered in Settings. Alan and Northern English male are calm British voices;
+// the extra German voices sound different from Thorsten (the only high-quality German Piper voice).
+const VOICES=['de_DE-thorsten-high','de_DE-karlsson-low','de_DE-pavoque-low','de_DE-kerstin-medium','de_DE-ramona-low','en_US-lessac-medium','en_GB-alan-medium','en_GB-northern_english_male-medium'];
 
 // Runs the Windows Python launcher and resolves with its exit code and the end of its output.
 function runPython(args,{timeout=120000,python='py'}={}){
