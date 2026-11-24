@@ -43,6 +43,12 @@ Preserve the upstream MIT license and attribution in [LICENSE](LICENSE). Do not 
   - Settings use the shared `SettingsGroup`/`SettingRow`/`Toggle`/`Segmented`/`Range` components in `main.jsx`. Approval modes are radio cards; sign-out and disconnect are secondary danger buttons.
   - The Answer voice card was nested inside Your boundaries and its labels had broken `?` characters; both are fixed.
   - Design rules came from the ui-ux-pro-max skill (contrast, focus rings, 150–300 ms motion, reduced motion, 32–44 px targets). Its generated teal palette was not used, to keep the existing lavender brand.
+- Microphone gain and test (2026-11-24):
+  - `MicGain` (0.5–8, default 1) is applied in software by `recognize.py`, `wake.py` (live through stdin `gain x`) and the new `speech/mictest.py`.
+  - The mic test (`backend/MicTest.cs`, methods `micTestStart`/`micTestStop`, which bypass the gate and pause the wake listener) streams the level, the detection threshold, partial transcripts about every 0.9 s while speaking, final lines and a wake flag. It can also monitor the microphone through `sd.Stream`.
+  - The wake word is easier: the name alone ("Clicky", "Klicki") counts at the start of a sentence, and the detection threshold went down (0.008, 3× noise floor). Status now reports `wakeReady`, because the ready event fires before the window loads.
+  - Tests: speech tests 7/7, desktop tests 24/24, backend build clean. A backend protocol run started the test (ready, 10 level events per second), applied a gain change live and stopped cleanly.
+  - On the dev PC the only input is "Microphone (Realtek Audio)" and it measured peak 0.0002 in silence. A very quiet or wrong input is the likely cause of missed wake words; the README tells users to raise Windows input volume too.
 - Hands-free wake word, "Hey Clicky" / "Hoi Clicky" (off by default; Settings → Voice → Hands-free):
   - Detection (`speech/wake.py`): an energy segmenter with an adaptive noise floor cuts speech segments. A tiny Whisper model (`speech/model-wake`, downloaded on first use) transcribes each one with the initial prompt "Clicky", and `match_wake` checks for the greeting plus name variants.
   - After the wake word the question is recorded until about 1.2 s of silence (5 s timeout if nothing is said) and transcribed with the main Whisper model. If the question came in the same breath, the whole segment is re-read with the main model.
