@@ -202,7 +202,7 @@ function App(){
  }
  const lastAnswer=messages.filter(m=>m.role==='hoi').at(-1)?.text||'';
  lastAnswerRef.current=lastAnswer;
- useEffect(()=>{if(!onIsland)api.presentation({phase,answer:listening||/transcrib|opening microphone|loading local/i.test(phase)?'':lastAnswer,question:messages.filter(m=>m.role==='you').at(-1)?.text||'',model:models.find(m=>m.Slug===status.model)?.Name||'',talk:talkLabel(status.key1,status.key2),busy,agentRunning,listening,error,glow:glowOn,notice,wakeOn:!!(status.wakeWord&&status.microphone&&status.wakeAvailable),wakeName:wakeName(status)}).catch(()=>{});},[phase,lastAnswer,busy,agentRunning,listening,error,glowOn,notice,status.wakeWord,status.microphone,status.wakeAvailable,status.wakeWords,messages,models,status.model,status.key1,status.key2]);
+ useEffect(()=>{if(!onIsland)api.presentation({phase,answer:listening||/transcrib|opening microphone|loading local/i.test(phase)?'':lastAnswer,question:messages.filter(m=>m.role==='you').at(-1)?.text||'',heard:(listening||/transcrib|opening microphone/i.test(phase))?question.trim():'',model:models.find(m=>m.Slug===status.model)?.Name||'',talk:talkLabel(status.key1,status.key2),busy,agentRunning,listening,error,glow:glowOn,notice,wakeOn:!!(status.wakeWord&&status.microphone&&status.wakeAvailable),wakeName:wakeName(status)}).catch(()=>{});},[phase,lastAnswer,busy,agentRunning,listening,error,glowOn,notice,status.wakeWord,status.microphone,status.wakeAvailable,status.wakeWords,question,messages,models,status.model,status.key1,status.key2]);
 
  if(onIsland)return <FloatingAssistant phase={phase} level={level}/>;
  const locked=busy||listening||voiceRef.current;
@@ -406,6 +406,7 @@ function FloatingAssistant({level}){
   const before=previous.current;previous.current=view;
   if((view.busy||before.busy)&&view.answer&&view.answer!==before.answer){setMode('panel');return;}
   if(view.error&&view.error!==before.error){setMode('panel');return;}
+  if(view.heard&&!before.heard){setMode('panel');return;}
   if(view.notice&&view.notice!==before.notice){setMode(current=>current==='orb'?'pill':current);return;}
   setMode(current=>active&&current==='orb'?'pill':!active&&!view.notice&&current==='pill'?'orb':current);
  },[view]);
@@ -441,11 +442,11 @@ function FloatingAssistant({level}){
      <button className="hc-icon" title="Fold into orb (Esc)" aria-label="Fold into orb" onClick={()=>setMode('orb')}><Minimize2 size={15}/></button>
     </div>
    </header>
-   {view.question&&(view.answer||view.busy||view.error)&&<p className="hc-question" title={view.question}>{view.question}</p>}
+   {view.question&&(view.answer||view.busy||view.error)&&<p className="hc-question" title={view.question}><span className="hc-question-label">You said</span>{view.question}</p>}
    <div className="hc-body" ref={body} tabIndex={0}>
     {approvals.map(item=><ApprovalCard key={item.id} item={item}/>)}
     {view.error?<div className="hc-error" role="alert"><strong>Something needs your attention</strong><p>{view.error}</p></div>
-    :view.listening||transcribing?<div className="hc-empty"><p className="hc-empty-lead">{view.listening?'Listening…':'Turning your words into text…'}</p><p>{view.listening?'Release '+talk+' to send.':'Your question is sent automatically.'}</p></div>
+    :view.listening||transcribing?<div className="hc-empty"><p className="hc-empty-lead">{view.listening?'Listening…':'Turning your words into text…'}</p>{view.heard?<p className="hc-heard" aria-live="polite">“{view.heard}”</p>:<p>{view.listening?'Pause briefly or release '+talk+' to send.':'Your question is sent automatically.'}</p>}</div>
     :view.answer?<FormattedAnswer text={view.answer}/>
     :view.busy?<div className="hc-thinking" aria-label="Thinking"><i/><i/><i/></div>
     :<div className="hc-empty"><p className="hc-empty-lead">Ask about anything on your screen.</p><p>Type below, or hold {talk} and speak.</p></div>}

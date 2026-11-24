@@ -323,6 +323,9 @@ html:has(.hc-root),body:has(.hc-root),body:has(.hc-root) #root{background:transp
 .hc-wake-dot{width:7px;height:7px;border-radius:50%;background:var(--hc-dim)}
 .hc-wake.on{color:var(--hc-mint);border-color:#8fe3c866;background:#8fe3c81a}
 .hc-wake.on .hc-wake-dot{background:var(--hc-mint);box-shadow:0 0 6px var(--hc-mint)}
+/* What HoiClicky heard: live while you talk, then labelled above the answer. */
+.hc-heard{margin:4px 0 0;font-size:17px;line-height:1.5;color:var(--hc-mist);font-style:italic;overflow-wrap:anywhere}
+.hc-question-label{display:block;margin-bottom:2px;font-size:10.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--hc-mint)}
 /* Pill */
 .hc-pill{width:100%;height:48px;border-radius:24px;display:flex;align-items:center;gap:7px;padding:0 7px;background:linear-gradient(135deg,var(--hc-ink-raised),var(--hc-ink));box-shadow:0 0 0 1px #0000004d,0 2px 6px #00000073}
 .hc-pill-open{height:100%;min-width:0;flex:1;display:flex;align-items:center;gap:11px;padding:0 4px 0 0;text-align:left;cursor:grab;touch-action:none;user-select:none}
