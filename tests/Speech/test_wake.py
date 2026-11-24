@@ -4,7 +4,7 @@ Run: speech\\.venv\\Scripts\\python.exe -m unittest discover -s tests/Speech
 import sys, unittest
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'speech'))
-from wake import match_wake, Segmenter, amplify
+from wake import match_wake, Segmenter, amplify, wake_words, wake_pattern, wake_prompt
 
 
 class WakeWordTests(unittest.TestCase):
@@ -26,6 +26,27 @@ class WakeWordTests(unittest.TestCase):
     def test_ignores_ordinary_speech(self):
         for heard in ['Ich klicke hier drauf', 'hey wie geht es dir', 'click the button', 'Das ist ein Klick', 'Thanks for watching']:
             self.assertFalse(match_wake(heard)[0], heard)
+
+
+class WakeWordChoiceTests(unittest.TestCase):
+    def test_parses_presets_and_own_words(self):
+        self.assertEqual(wake_words(''), ['clicky'])
+        self.assertEqual(wake_words('Jarvis, clicky,friday,jarvis,no way!,x'), ['jarvis', 'clicky', 'friday'])
+        self.assertEqual(wake_prompt(['clicky', 'jarvis', 'friday']), 'Names: Clicky, Jarvis, Friday.')
+
+    def test_jarvis_and_its_misspellings(self):
+        jarvis = wake_pattern(['jarvis'])
+        for heard in ['Hey Jarvis', 'Hey Jarwis!', 'hey, Javis', 'Jarvis, wie spät ist es?', 'Hoi Dschawis', 'Hey Jervis', 'H. Arvis.', 'Hey Arvis']:
+            self.assertTrue(match_wake(heard, jarvis)[0], heard)
+        self.assertEqual(match_wake('Jarvis wie spät ist es', jarvis)[1], 'wie spät ist es')
+        for heard in ['Ende des Jahres', 'hey Travis', 'Hey Clicky', 'Ich habe es vergessen', 'Arvis kommt', 'Er hat Hervis gekauft']:
+            self.assertFalse(match_wake(heard, jarvis)[0], heard)
+
+    def test_own_word_and_several_words(self):
+        both = wake_pattern(['clicky', 'friday'])
+        self.assertTrue(match_wake('Hey Friday, mach Musik an', both)[0])
+        self.assertTrue(match_wake('Hoi Clicky', both)[0])
+        self.assertFalse(match_wake('Am Friday gehe ich', both)[0])
 
 
 class GainTests(unittest.TestCase):

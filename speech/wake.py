@@ -15,15 +15,55 @@ MAIN_MODEL = ROOT / 'model'
 WAKE_MODEL = ROOT / 'model-wake'
 RATE = 16000
 BLOCK = 1600  # 100 ms
-# Biases Whisper towards the spelling 'Clicky'. Do not put the whole phrase here: Whisper tends to drop prompt words from its output.
-PROMPT = 'Clicky'
 
 GREETING = r'(?:hey|hei|hej|he|hi|hai|hay|hoi|hoy|ahoi|oy|oi|heu|ey|eh|hallo|hello|ok(?:ay)?)'
+# A lone 'h' followed by a space covers a swallowed 'Hey' (Whisper sometimes writes 'H. Arvis' for 'Hey Jarvis').
+LEAD_IN = r'(?:' + GREETING + r'\s*|h\s+)'
 NAME = r'(?:[ckg]l?[iyeu]+c?k+[iyeu]*|[ckg]l[iy]k+[iy]?|[ckg]li[ck]+(?:ie|ey|i|y|e)?|clicky|klicky|klicki)'
 # The name on its own also counts when it opens the sentence, in case the greeting gets lost.
 # It must end in an "ee" sound so ordinary words like "click" or "klicke" never match.
 NAME_ALONE = r'(?:[ckg]l[iy]+c?k+(?:y|i|ie|ey)|cliquey|klicky|klicki|clicky)'
-WAKE = re.compile(r'\b' + GREETING + r'\s*' + NAME + r'\b|\bhoi\s*clicky\b|\bheyclicky\b|\bhoiclicky\b|^(?:a |the |oh )?' + NAME_ALONE + r'\b', re.IGNORECASE)
+
+# Wake words the user can pick in Settings: (pattern after a greeting, pattern alone at the start, spelling for Whisper).
+# Jarvis needs the v/w sound so German words like "Jahres" never match.
+JARVIS = r'(?:j|dsch|dj|ch|sh)[ae]h?r?[vw][iey]s+'
+# After a greeting the first sound may be lost ('Hey Arvis').
+JARVIS_AFTER_GREETING = r'(?:j|dsch|dj|ch|sh|y)?[ae]h?r?[vw][iey]s+'
+PRESETS = {
+    'clicky': (NAME, NAME_ALONE, 'Clicky'),
+    'jarvis': (JARVIS_AFTER_GREETING, JARVIS, 'Jarvis'),
+    'computer': (r'[ck]omp?j?[uü]ter', r'[ck]omp?j?[uü]ter', 'Computer'),
+}
+DEFAULT_WORDS = ['clicky']
+
+
+def wake_words(value=None):
+    """Parse HOICLICKY_WAKE_WORDS ("clicky,jarvis,friday"): presets or the user's own words (letters only)."""
+    raw = os.environ.get('HOICLICKY_WAKE_WORDS', '') if value is None else value
+    words = [w.strip().lower() for w in raw.split(',')]
+    words = [w for w in words if w in PRESETS or re.fullmatch(r'[a-zäöüß]{2,20}', w)]
+    return list(dict.fromkeys(words)) or list(DEFAULT_WORDS)
+
+
+def wake_pattern(words):
+    parts = []
+    for word in words:
+        full, alone, _ = PRESETS.get(word, (re.escape(word), re.escape(word), word))
+        parts.append(r'\b' + LEAD_IN + full + r'\b')
+        parts.append(r'^(?:a |the |oh )?' + alone + r'\b')
+        parts.append(r'\b(?:hey|hoi)' + full + r'\b')
+    return re.compile('|'.join(parts), re.IGNORECASE)
+
+
+def wake_prompt(words):
+    """Biases Whisper towards the right spelling. A labelled list works best: bare names or whole
+    phrases like 'Hey Clicky' make Whisper drop exactly those words from its output."""
+    return 'Names: ' + ', '.join(PRESETS[w][2] if w in PRESETS else w.capitalize() for w in words) + '.'
+
+
+WORDS = wake_words()
+WAKE = wake_pattern(WORDS)
+PROMPT = wake_prompt(WORDS)
 
 
 def emit(kind, value=''):
@@ -46,13 +86,28 @@ def normalize(text):
     return re.sub(r'\s+', ' ', re.sub(r'[^\w\s]', ' ', text.lower())).strip()
 
 
-def match_wake(text):
+def match_wake(text, pattern=None):
     """Return (found, remainder): remainder is what was said after the wake word."""
     clean = normalize(text)
-    found = WAKE.search(clean)
+    found = (pattern or WAKE).search(clean)
     if not found:
         return False, ''
     return True, clean[found.end():].strip()
+
+
+def hear_wake(model, audio, languages, pattern=None, prompt=None):
+    """Check one speech segment for a wake word. Returns (heard, found, remainder).
+    The spelling hint helps Whisper write the names right, but for some voices it makes Whisper
+    skip the name entirely, so a miss is checked once more without the hint."""
+    from langs import transcribe_allowed
+    heard = ''
+    for hint in (prompt or PROMPT, None):
+        heard, _ = transcribe_allowed(model, audio, languages, beam_size=1, condition_on_previous_text=False,
+            without_timestamps=True, initial_prompt=hint)
+        found, remainder = match_wake(heard, pattern)
+        if found:
+            return heard, True, remainder
+    return heard, False, ''
 
 
 class Segmenter:
@@ -164,8 +219,7 @@ def main():
             audio = np.concatenate(segment)
             if len(audio) < RATE * 0.4:
                 continue
-            heard = transcribe(wake_model, audio, initial_prompt=PROMPT)
-            found, remainder = match_wake(heard)
+            heard, found, remainder = hear_wake(wake_model, audio, languages)
             if not found:
                 continue
             emit('wake', heard)
