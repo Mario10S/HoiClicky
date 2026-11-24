@@ -43,6 +43,10 @@ Preserve the upstream MIT license and attribution in [LICENSE](LICENSE). Do not 
   - Settings use the shared `SettingsGroup`/`SettingRow`/`Toggle`/`Segmented`/`Range` components in `main.jsx`. Approval modes are radio cards; sign-out and disconnect are secondary danger buttons.
   - The Answer voice card was nested inside Your boundaries and its labels had broken `?` characters; both are fixed.
   - Design rules came from the ui-ux-pro-max skill (contrast, focus rings, 150–300 ms motion, reduced motion, 32–44 px targets). Its generated teal palette was not used, to keep the existing lavender brand.
+- Selectable wake words (`WakeWords`, default ["clicky"]; env `HOICLICKY_WAKE_WORDS`):
+  - Presets are clicky, jarvis (needs a v/w sound, so "Jahres" never matches; after a greeting the J may be missing, as in "H. Arvis") and computer. Own words must be letters only, 2–20 characters, at most 8 in total.
+  - `wake_pattern` accepts each word after a greeting, after a lone "h ", or alone at the start. The Whisper hint is the labelled list "Names: Clicky, Jarvis."; bare names or phrases made Whisper drop them. `hear_wake` retries a miss once without the hint.
+  - Synthetic Piper speech: each word set triggered only its own names, and plain sentences never triggered. Speech tests passed 15/15.
 - Microphone gain and test (2026-11-24):
   - `MicGain` (0.5–8, default 1) is applied in software by `recognize.py`, `wake.py` (live through stdin `gain x`) and the new `speech/mictest.py`.
   - The mic test (`backend/MicTest.cs`, methods `micTestStart`/`micTestStop`, which bypass the gate and pause the wake listener) streams the level, the detection threshold, partial transcripts about every 0.9 s while speaking, final lines and a wake flag. It can also monitor the microphone through `sd.Stream`.
