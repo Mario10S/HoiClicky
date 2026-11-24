@@ -14,6 +14,14 @@ test('installs piper-tts when it is missing, then downloads the voice',async()=>
  assert.deepEqual(calls[3].slice(2),['en_US-lessac-medium','--data-dir','C:/voices']);
 });
 
+test('offers the British voices',async()=>{
+ for(const voice of ['en_GB-alan-medium','en_GB-northern_english_male-medium']){
+  const {run,calls}=fake({check:{code:0,output:''},'piper.download_voices':{code:0,output:''}});
+  assert.equal(await installVoice(voice,'C:/voices',run),true);
+  assert.equal(calls.at(-1)[2],voice);
+ }
+});
+
 test('skips installing when piper is already there',async()=>{
  const {run,calls}=fake({check:{code:0,output:''}});
  assert.equal(await ensurePiper(run),false);assert.equal(calls.length,1);
