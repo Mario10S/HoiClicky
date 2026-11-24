@@ -16,8 +16,9 @@ class Program {
  static void OnWake(string kind,string value){
   switch(kind){
    case "wake":
-    if(wakeActive||heldVoice||!gate.Wait(0))return; // busy answering or already talking
-    wakeActive=true;Emit(new{eventName="hold",value=true});Emit(new{eventName="voice",kind="ready",value="Listening"});break;
+    if(wakeActive||heldVoice)return; // already talking
+    // While an answer or agent run holds the gate, still listen: the user may be interrupting it.
+    wakeOwnsGate=gate.Wait(0);wakeActive=true;Emit(new{eventName="hold",value=true});Emit(new{eventName="voice",kind="ready",value="Listening"});break;
    case "listening":if(wakeActive)Emit(new{eventName="voice",kind="ready",value});break;
    case "level":if(wakeActive)Emit(new{eventName="voice",kind="level",value});break;
    case "partial":if(wakeActive)Emit(new{eventName="voice",kind="partial",value});break;
@@ -32,10 +33,11 @@ class Program {
    case "stopped":wakeReady=false;if(wakeActive)FinishWake();Emit(new{eventName="wakeState",state="off",value=""});break;
   }
  }
- static void FinishWake(){if(!wakeActive)return;wakeActive=false;Emit(new{eventName="hold",value=false});Emit(new{eventName="voice",kind="complete",value=""});gate.Release();}
+ static bool wakeOwnsGate,heldOwnsGate;
+ static void FinishWake(){if(!wakeActive)return;wakeActive=false;Emit(new{eventName="hold",value=false});Emit(new{eventName="voice",kind="complete",value=""});if(wakeOwnsGate){wakeOwnsGate=false;gate.Release();}}
  // Agent mode: open approval requests by id, and the running agent so Stop can cancel it.
  static readonly System.Collections.Concurrent.ConcurrentDictionary<string,TaskCompletionSource<bool>> approvals=new();
- static CancellationTokenSource? agentRun;
+ static CancellationTokenSource? agentRun,askRun;
  static AgentSettings AgentSettingsNow()=>new(LocalSettings.Current.AgentApproval,LocalSettings.Current.AgentTools,LocalSettings.Current.AgentWorkspace??"",LocalSettings.Current.AllowScreenCapture);
  static string DesktopMcpConfig(){var exe=Environment.ProcessPath??"dotnet";var dll=typeof(Program).Assembly.Location;var viaDotnet=Path.GetFileNameWithoutExtension(exe).Equals("dotnet",StringComparison.OrdinalIgnoreCase);return ClaudeAgentRunner.McpConfig(exe,viaDotnet?[dll,"--mcp-desktop"]:["--mcp-desktop"]);}
  static async Task<bool> AskUser(AgentApproval approval,CancellationToken token){
@@ -55,15 +57,16 @@ class Program {
  static bool heldVoice;
  static void OnHold(bool down){
   if(!down){if(heldVoice){voice.Stop();Emit(new{eventName="hold",value=false});}return;}
-  if(!gate.Wait(0))return;
+  if(heldVoice||wakeActive)return;
+  heldOwnsGate=gate.Wait(0); // false while answering: the recording is an interruption and runs beside it
   heldVoice=true;wake.Pause();Emit(new{eventName="hold",value=true});_=RunHeldVoice();
  }
- static async Task RunHeldVoice(){try{await voice.ListenAsync((kind,value)=>Emit(new{eventName="voice",kind,value}));}catch(Exception ex){Emit(new{eventName="voice",kind="error",value=ex.Message});}finally{heldVoice=false;Emit(new{eventName="voice",kind="complete",value=""});gate.Release();wake.Resume();}}
+ static async Task RunHeldVoice(){try{await voice.ListenAsync((kind,value)=>Emit(new{eventName="voice",kind,value}));}catch(Exception ex){Emit(new{eventName="voice",kind="error",value=ex.Message});}finally{heldVoice=false;Emit(new{eventName="voice",kind="complete",value=""});if(heldOwnsGate){heldOwnsGate=false;gate.Release();}wake.Resume();}}
  static async Task Handle(JsonElement msg){var id=msg.GetProperty("id").GetInt32();var method=msg.GetProperty("method").GetString();
   if(method=="voiceStop"){voice.Stop();Emit(new{id,result=true});return;}
   // Approvals and Stop must not wait for the gate: the running agent holds it.
   if(method=="approve"){var a=msg.GetProperty("args");var found=approvals.TryGetValue(a.GetProperty("id").GetString()??"",out var pending)&&pending.TrySetResult(a.GetProperty("allow").GetBoolean());Emit(new{id,result=found});return;}
-  if(method=="agentStop"){agentRun?.Cancel();Emit(new{id,result=true});return;}
+  if(method=="agentStop"){agentRun?.Cancel();askRun?.Cancel();Emit(new{id,result=true});return;}
   // The microphone test runs beside everything else and never waits for the gate.
   if(method=="micTestStart"){if(!LocalSettings.Current.AllowMicrophone){Emit(new{id,error="Turn on the microphone in Privacy first."});return;}var monitor=msg.TryGetProperty("args",out var mt)&&mt.ValueKind==JsonValueKind.Object&&mt.TryGetProperty("monitor",out var m)&&m.ValueKind==JsonValueKind.True;wake.Pause();micTest.Start(monitor);Emit(new{id,result=true});return;}
   if(method=="micTestStop"){micTest.Stop();wake.Resume();Emit(new{id,result=true});return;}
@@ -130,7 +133,12 @@ class Program {
       break;
      }
      if(image is not null)question+="\n\nIf a visual annotation would help explain this screen, append ONE marker at the very end of your answer. Use [[POINT:x,y]] to circle one visible element or [[ARROW:x1,y1,x2,y2]] to show a meaningful direction between two visible locations. Coordinates are integer percentages (0 to 100) of the screenshot from its top-left. For an explicitly requested action such as clicking a control or closing a window, use POINT at the center of the specific visible control needed for that action. Do not claim the action was performed; the app will report whether it succeeded. Do not add a marker if uncertain or if no visual aid is useful.";
-     var answer=await ai.AskAsync(question,image,model,text=>Emit(new{eventName="answer",value=image is null?text:Annotations.Clean(text)}),history);
+     // Stop ends the wait right away; the provider may still finish in the background, but its text is dropped.
+     var askStop=new CancellationTokenSource();askRun=askStop;string answer;
+     try{var work=ai.AskAsync(question,image,model,text=>{if(!askStop.IsCancellationRequested)Emit(new{eventName="answer",value=image is null?text:Annotations.Clean(text)});},history);
+      if(await Task.WhenAny(work,Task.Delay(Timeout.Infinite,askStop.Token))!=work){_=work.ContinueWith(t=>_=t.Exception,TaskScheduler.Default);throw new OperationCanceledException("Stopped.");}
+      answer=await work;}
+     finally{askRun=null;askStop.Dispose();}
      if(image is not null && Annotations.Parse(answer) is { } mark){var c=mark.Coordinates;int X(int n)=>bounds.Left+(int)(Math.Max(0,bounds.Width-1)*n/100.0);int Y(int n)=>bounds.Top+(int)(Math.Max(0,bounds.Height-1)*n/100.0);if(mark.Kind=="POINT")Emit(new{eventName="point",x=X(c[0]),y=Y(c[1])});else Emit(new{eventName="arrow",x1=X(c[0]),y1=Y(c[1]),x2=X(c[2]),y2=Y(c[3])});}
      result=image is null?answer:Annotations.Clean(answer);break;
     case "voice":
