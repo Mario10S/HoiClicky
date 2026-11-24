@@ -30,6 +30,7 @@ internal sealed class WakeListener:IDisposable {
    start.ArgumentList.Add("-u");start.ArgumentList.Add(found.Value.Script);
    start.Environment["HOICLICKY_SPEECH_LANGUAGES"]=string.Join(",",LocalSettings.Current.SpeechLanguages);
    start.Environment["HOICLICKY_MIC_GAIN"]=MicTest.Gain(LocalSettings.Current.MicGain);
+   start.Environment["HOICLICKY_WAKE_WORDS"]=string.Join(",",LocalSettings.Current.WakeWords);
    var child=Process.Start(start);if(child is null){onEvent("error","Hands-free listening could not start.");return;}
    process=child;_=child.StandardError.ReadToEndAsync();
    _=Task.Run(async()=>{

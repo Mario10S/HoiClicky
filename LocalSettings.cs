@@ -17,6 +17,8 @@ internal sealed class LocalSettings
     public bool AllowMicrophone { get; set; }
     // Hands-free "Hey Clicky" listening; off until the user turns it on.
     public bool WakeWord { get; set; }
+    // Names that wake HoiClicky: presets (clicky, jarvis, computer) or the user's own words.
+    public string[] WakeWords { get; set; } = ["clicky"];
     // Languages speech recognition may use (Whisper codes); everything else is ignored. German and English by default.
     public string[] SpeechLanguages { get; set; } = ["de", "en"];
     public static readonly string[] SupportedSpeechLanguages = ["de", "en", "fr", "es", "it", "pt", "nl", "pl", "tr", "sq", "hr", "sr", "bs", "ru", "uk", "ar"];

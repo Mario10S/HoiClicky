@@ -21,6 +21,7 @@ internal sealed class MicTest:IDisposable {
    start.ArgumentList.Add("-u");start.ArgumentList.Add(script);
    start.Environment["HOICLICKY_SPEECH_LANGUAGES"]=string.Join(",",LocalSettings.Current.SpeechLanguages);
    start.Environment["HOICLICKY_MIC_GAIN"]=Gain(LocalSettings.Current.MicGain);
+   start.Environment["HOICLICKY_WAKE_WORDS"]=string.Join(",",LocalSettings.Current.WakeWords);
    start.Environment["HOICLICKY_MIC_MONITOR"]=monitor?"1":"0";
    var child=Process.Start(start);if(child is null){onEvent("error","The microphone test could not start.");return;}
    process=child;_=child.StandardError.ReadToEndAsync();
