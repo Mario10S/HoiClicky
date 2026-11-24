@@ -61,6 +61,7 @@ app.whenReady().then(()=>{
  ipcMain.handle('confirm-action',(event,data)=>{if(event.sender!==main.webContents)throw Error('Invalid sender');if(typeof data?.title!=='string'||typeof data?.detail!=='string')throw Error('Invalid confirmation');return call('confirmAction',{title:data.title.slice(0,200),detail:data.detail.slice(0,1000)});});
  // Read aloud in the floating panel controls the one speech output, which lives in the chat window.
  ipcMain.handle('island-speech',(event,action)=>{if(event.sender!==island?.webContents)throw Error('Invalid sender');if(!['toggle','stop'].includes(action))throw Error('Invalid speech action');main.webContents.send('event',{eventName:'islandSpeech',action});});
+ ipcMain.handle('mic-test',(event,data)=>{if(event.sender!==main.webContents)throw Error('Invalid sender');if(data?.action==='stop')return call('micTestStop');if(data?.action!=='start')throw Error('Invalid microphone test action');return call('micTestStart',{monitor:!!data.monitor});});
  ipcMain.handle('pick-workspace',async event=>{if(event.sender!==main.webContents)throw Error('Invalid sender');const choice=await dialog.showOpenDialog(main,{title:'Choose a workspace folder for agent mode',properties:['openDirectory','createDirectory']});return choice.canceled?null:choice.filePaths[0]||null;});
  ipcMain.handle('settings',(_,data)=>{
   if(typeof data?.screen!=='boolean'||typeof data?.microphone!=='boolean'||typeof data?.model!=='string')throw Error('Invalid settings');

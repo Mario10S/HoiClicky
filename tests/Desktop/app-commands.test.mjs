@@ -40,6 +40,8 @@ test('changes that widen what the agent may do need confirmation',()=>{
  assert.equal(planAppAction({action:'set',setting:'wake_word',value:false},{...ctx,status:{...ctx.status,wakeWord:true}}).sensitive,false);
  assert.deepEqual(planAppAction({action:'set',setting:'speech_language',value:'de'},ctx).change,{type:'setting',patch:{speechLanguage:'de'}});
  assert.equal(planAppAction({action:'set',setting:'speech_language',value:'fr'},ctx).ok,false);
+ assert.deepEqual(planAppAction({action:'set',setting:'mic_gain',value:2},ctx).change,{type:'setting',patch:{micGain:2}});
+ assert.equal(planAppAction({action:'set',setting:'mic_gain',value:9},ctx).ok,false);
  assert.equal(planAppAction({action:'set',setting:'screens',value:'all'},{...ctx,status:{...ctx.status,screens:'cursor'}}).sensitive,true);
  assert.equal(planAppAction({action:'set',setting:'screens',value:'cursor'},{...ctx,status:{...ctx.status,screens:'all'}}).sensitive,false);
  assert.equal(planAppAction({action:'set',setting:'screens',value:'both'},ctx).ok,false);
